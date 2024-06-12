@@ -120,7 +120,7 @@ mod test {
 
     #[test]
     fn network_random(){
-        let mut rng = ChaCha8Rng::from_seed(Default::default());
+        // let mut rng = ChaCha8Rng::from_seed(Default::default());
         todo!()
     }
 }
