@@ -1,0 +1,14 @@
+[package]
+name = "lib-simulation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nalgebra = { version = "0.32.6", features = ["rand-no-std"] }
+rand = "0.8.5"
+lib-genetic-algorithm = {path = "../genetic-algorithm"}
+lib-neural-network = {path = "../neural-network"}
+
+[dev-dependencies]
+rand_chacha = "0.3.1"
+test-case = "3.3.1"

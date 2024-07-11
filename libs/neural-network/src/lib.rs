@@ -40,6 +40,28 @@ impl Network {
         }
         Self { layers: built_layers }
     }
+    pub fn weights(&self) -> Vec<f32>{
+        let mut weights: Vec<f32> = Vec::new();
+
+        for layer in &self.layers{
+            for neuron in &layer.neurons{
+                weights.push(neuron.bias);
+                for weight in &neuron.weights{
+                    weights.push(*weight);
+                }
+            }
+        }
+
+        weights
+    }
+
+    pub fn from_weights(
+        layers: &[LayerTopology],
+        weights: impl IntoIterator<Item = f32>,
+    ) -> Self{
+
+        todo!()
+    }
 }
 
 impl Layer {
@@ -119,8 +141,25 @@ mod test {
     }
 
     #[test]
-    fn network_random(){
-        // let mut rng = ChaCha8Rng::from_seed(Default::default());
-        todo!()
+    fn weights(){
+        let network = Network{
+            layers: vec![
+                Layer {
+                    neurons: vec![Neuron {
+                        bias: 0.1,
+                        weights: vec![0.2, 0.3, 0.4],
+                    }],
+                },
+                Layer {
+                    neurons: vec![Neuron {
+                        bias: 0.5,
+                        weights: vec![0.6, 0.7, 0.8],
+                    }],
+                },
+            ],
+        };
+        let actual = network.weights();
+        let expected = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+        assert_relative_eq!(actual.as_slice(), expected.as_slice())
     }
 }

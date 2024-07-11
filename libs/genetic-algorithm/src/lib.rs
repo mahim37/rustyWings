@@ -119,9 +119,8 @@ pub struct GaussianMutation {
 
 impl GaussianMutation {
     pub fn new(chance: f32, coefficient: f32) -> Self {
-        assert!(chance >= 0.0 && chance <= 1.0);
-        assert!(coefficient >= 0.0 && coefficient <= 3.0);
-
+        assert!((0.0..=1.0).contains (&chance));
+        assert!((0.0..=3.0).contains (&coefficient));
         Self { chance, coefficient }
     }
 }
