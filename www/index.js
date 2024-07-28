@@ -3,6 +3,13 @@ import * as sim from "lib-simulation-wasm";
 const simulation = new sim.Simulation();
 let world = simulation.world();
 
+document.getElementById('train').onclick = function() {
+    simulation.train();
+};
+document.getElementById('train').onclick = function() {
+    console.log(simulation.train());
+};
+
 
 const viewport = document.getElementById('viewport');
 
@@ -65,7 +72,6 @@ function redraw() {
 
 
     for(const food of world.foods){
-        console.log(food);
         ctxt.drawCircle(
             food.x * viewportWidth,
             food.y * viewportHeight,

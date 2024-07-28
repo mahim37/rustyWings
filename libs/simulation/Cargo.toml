@@ -8,6 +8,8 @@ nalgebra = { version = "0.32.6", features = ["rand-no-std"] }
 rand = "0.8.5"
 lib-genetic-algorithm = {path = "../genetic-algorithm"}
 lib-neural-network = {path = "../neural-network"}
+serde = { version = "1.0.204", features = ["derive"] }
+approx = "0.5.1"
 
 [dev-dependencies]
 rand_chacha = "0.3.1"
