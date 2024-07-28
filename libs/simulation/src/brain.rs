@@ -19,7 +19,7 @@ impl Brain {
         // VERIFY
         // HELP
 
-        let nn = nn::Network::from_weights(&Self::topology(config), chromosome.into_iter());
+        let nn = nn::Network::from_weights(&Self::topology(config), chromosome.iter());
 
         Self::new(config, nn)
     }
