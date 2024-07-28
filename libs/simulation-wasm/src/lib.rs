@@ -7,7 +7,6 @@ pub use self::food::*;
 pub use self::world::*;
 use lib_simulation as sim;
 use rand::prelude::*;
-use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
