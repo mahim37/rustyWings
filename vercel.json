@@ -5,11 +5,19 @@
       "src": "www/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist"
+        "distDir": "dist",
+        "buildCommand": "cd .. && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && wasm-pack build --target web && cd www && npm install && npm run build"
       }
     }
   ],
   "routes": [
+    {
+      "src": "/(.*)\\.(wasm)",
+      "headers": {
+        "content-type": "application/wasm"
+      },
+      "continue": true
+    },
     {
       "src": "/(.*)",
       "dest": "/www/$1"
