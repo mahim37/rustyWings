@@ -9,22 +9,17 @@ module.exports = {
     },
     mode: "development",
     plugins: [
-        new CopyWebpackPlugin({
-            patterns: [
-                { from: "index.html" },
-                { from: "index.css" }
-            ]
-        })
+        new CopyWebpackPlugin(['index.html', "index.css"]),
+        new CopyWebpackPlugin([
+            { from: '../pkg/lib_simulation_wasm_bg.wasm', to: './' }
+        ])
     ],
-    devServer: {
-        host: '0.0.0.0',
-        static: {
-            directory: path.join(__dirname, 'dist'),
-        },
-        compress: true,
-        port: 8080,
-    },
     experiments: {
         asyncWebAssembly: true,
     },
+    resolve: {
+        alias: {
+            'lib-simulation-wasm': path.resolve(__dirname, '../pkg')
+        }
+    }
 };
