@@ -9,10 +9,20 @@ module.exports = {
     },
     mode: "development",
     plugins: [
-        new CopyWebpackPlugin(['index.html', "index.css"])
+        new CopyWebpackPlugin({
+            patterns: [
+                { from: "index.html" },
+                { from: "index.css" }
+            ]
+        })
     ],
     devServer: {
         host: '0.0.0.0',
+        static: {
+            directory: path.join(__dirname, 'dist'),
+        },
+        compress: true,
+        port: 8080,
     },
     experiments: {
         asyncWebAssembly: true,
