@@ -1,25 +1,62 @@
-const CopyWebpackPlugin = require("copy-webpack-plugin");
 const path = require('path');
+const CopyWebpackPlugin     = require('copy-webpack-plugin');
 
 module.exports = {
     entry: "./bootstrap.js",
+
     output: {
         path: path.resolve(__dirname, "dist"),
         filename: "bootstrap.js",
     },
+
     mode: "development",
-    plugins: [
-        new CopyWebpackPlugin(['index.html', "index.css"]),
-        new CopyWebpackPlugin([
-            { from: '../pkg/lib_simulation_wasm_bg.wasm', to: './' }
-        ])
-    ],
+
+    module: {
+        rules: [
+            {
+                // tell Webpack how to handle your .wasm files
+                test: /\.wasm$/i,
+                type: "webassembly/async",
+            },
+        ],
+    },
+
     experiments: {
         asyncWebAssembly: true,
     },
+
     resolve: {
         alias: {
-            'lib-simulation-wasm': path.resolve(__dirname, '../pkg')
-        }
-    }
+            // point at the actual pkg folder
+            'lib-simulation-wasm': path.resolve(
+                __dirname,
+                '../libs/simulation-wasm/pkg'
+            )
+        },
+        extensions: ['.js', '.wasm', '.json'],
+    },
+
+    plugins: [
+
+        new CopyWebpackPlugin({
+            patterns: [
+                // copy your HTML & CSS
+                { from: 'index.html', to: './' },
+                { from: 'index.css',  to: './' },
+                {
+                    from: path.resolve(
+                        __dirname,
+                        '../libs/simulation-wasm/pkg/lib_simulation_wasm_bg.wasm'
+                    ),
+                    to: './'
+                },
+            ]
+        }),
+    ],
+
+    devServer: {
+        static: path.join(__dirname, 'dist'),
+        compress: true,
+        port: 8080,
+    },
 };
