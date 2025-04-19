@@ -1,4 +1,3 @@
-// vercel.json (in the project root)
 {
   "buildCommand": "(cd libs/simulation-wasm && npx wasm-pack build --release --out-dir pkg) && (cd www && npm run build)",
   "outputDirectory": "www/",
