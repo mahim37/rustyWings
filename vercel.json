@@ -1,5 +1,5 @@
 {
   "buildCommand": "(cd libs/simulation-wasm && npx wasm-pack build --release --out-dir pkg) && (cd www && npm run build)",
   "outputDirectory": "www/",
-  "installCommand": "cd www && npm install"
+  "installCommand": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && cd www && npm install"
 }
