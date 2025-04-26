@@ -1,0 +1,37 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_world_free: (a: number, b: number) => void;
+export const __wbg_get_world_animals: (a: number) => [number, number];
+export const __wbg_set_world_animals: (a: number, b: number, c: number) => void;
+export const __wbg_get_world_foods: (a: number) => [number, number];
+export const __wbg_set_world_foods: (a: number, b: number, c: number) => void;
+export const __wbg_simulation_free: (a: number, b: number) => void;
+export const simulation_new: (a: any) => number;
+export const simulation_default_config: () => any;
+export const simulation_config: (a: number) => any;
+export const simulation_world: (a: number) => number;
+export const simulation_step: (a: number) => [number, number];
+export const simulation_train: (a: number) => [number, number];
+export const __wbg_food_free: (a: number, b: number) => void;
+export const __wbg_get_food_x: (a: number) => number;
+export const __wbg_set_food_x: (a: number, b: number) => void;
+export const __wbg_get_food_y: (a: number) => number;
+export const __wbg_set_food_y: (a: number, b: number) => void;
+export const __wbg_animal_free: (a: number, b: number) => void;
+export const __wbg_get_animal_x: (a: number) => number;
+export const __wbg_set_animal_x: (a: number, b: number) => void;
+export const __wbg_get_animal_y: (a: number) => number;
+export const __wbg_set_animal_y: (a: number, b: number) => void;
+export const __wbg_get_animal_rotation: (a: number) => number;
+export const __wbg_set_animal_rotation: (a: number, b: number) => void;
+export const __wbg_get_animal_vision: (a: number) => [number, number];
+export const __wbg_set_animal_vision: (a: number, b: number, c: number) => void;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_export_2: WebAssembly.Table;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __externref_drop_slice: (a: number, b: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;

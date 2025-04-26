@@ -30,7 +30,7 @@ module.exports = {
             // point at the actual pkg folder
             'lib-simulation-wasm': path.resolve(
                 __dirname,
-                '../libs/simulation-wasm/pkg'
+                './pkg'
             )
         },
         extensions: ['.js', '.wasm', '.json'],
@@ -46,7 +46,7 @@ module.exports = {
                 {
                     from: path.resolve(
                         __dirname,
-                        '../libs/simulation-wasm/pkg/lib_simulation_wasm_bg.wasm'
+                        './pkg/lib_simulation_wasm_bg.wasm'
                     ),
                     to: './'
                 },

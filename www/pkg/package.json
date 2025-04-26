@@ -1,0 +1,17 @@
+{
+  "name": "lib-simulation-wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "lib_simulation_wasm_bg.wasm",
+    "lib_simulation_wasm.js",
+    "lib_simulation_wasm_bg.js",
+    "lib_simulation_wasm.d.ts"
+  ],
+  "main": "lib_simulation_wasm.js",
+  "types": "lib_simulation_wasm.d.ts",
+  "sideEffects": [
+    "./lib_simulation_wasm.js",
+    "./snippets/*"
+  ]
+}
