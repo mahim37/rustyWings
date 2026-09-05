@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rustyWings · mockup C · Field Guide</title>
+<style>
+:root{color-scheme:light;--page:#f4f3ee;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--ink-3:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);
+--herb:#2a78d6;--pred:#eb6834;--plant:#1baf7a;--accent:#2a78d6;--font:system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--page);color:var(--ink);font:14px/1.5 var(--font);display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:1fr 380px;grid-template-areas:"head head" "stage side" "bar bar";gap:16px;padding:18px 22px;overflow:hidden}
+.tn{font-variant-numeric:tabular-nums}
+header{grid-area:head;display:flex;align-items:flex-end;gap:24px}
+h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.01em}h1 small{font-weight:400;color:var(--ink-2);font-size:15px;margin-left:10px}
+.tag{color:var(--ink-2);font-size:14px;margin-top:2px}
+.chips{margin-left:auto;display:flex;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);box-shadow:0 1px 2px rgba(0,0,0,.04);font-size:13px;color:var(--ink-2)}.chip i{width:12px;height:12px;border-radius:50%;display:inline-block}.chip b{color:var(--ink);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05)}
+main.stage{grid-area:stage;display:grid;place-items:center;position:relative;overflow:hidden;padding:14px}
+canvas{display:block;border-radius:12px;cursor:pointer}
+.callout{position:absolute;max-width:240px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--ink-2);box-shadow:0 8px 24px rgba(0,0,0,.10);pointer-events:none;transition:left .12s linear,top .12s linear}
+.callout b{color:var(--ink);font-weight:600}.callout::before{content:"";position:absolute;left:-7px;top:14px;width:12px;height:12px;background:var(--surface);border-left:1px solid var(--border);border-bottom:1px solid var(--border);transform:rotate(45deg)}
+.welcome{position:absolute;left:28px;top:28px;max-width:260px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--ink-2);box-shadow:0 8px 24px rgba(0,0,0,.08)}.welcome b{color:var(--ink)}.welcome .x{position:absolute;right:8px;top:6px;color:var(--ink-3);cursor:pointer;pointer-events:auto}
+aside.side{grid-area:side;display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0;padding-right:2px}
+.card.pad{padding:14px 16px}
+h2{margin:0 0 10px;font-size:15px;font-weight:600}h2 span{color:var(--ink-3);font-weight:400;font-size:13px;margin-left:8px}
+.now{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.now div{display:flex;flex-direction:column;gap:2px}.now .l{display:flex;align-items:center;gap:6px;color:var(--ink-2);font-size:13px}.now .l i{width:10px;height:10px;border-radius:50%;display:inline-block}.now .v{font-size:24px;font-weight:600;line-height:1.1}.now .d{font-size:12px;color:var(--ink-3)}
+.cap{display:flex;align-items:center;gap:6px;color:var(--ink-2);font-size:13px;margin:8px 0 0}.cap i{width:14px;height:2px;border-radius:1px;display:inline-block}
+.chart{position:relative}.chart svg{display:block;width:100%}
+.legend{display:flex;gap:14px;margin-bottom:2px;color:var(--ink-2);font-size:13px}.legend b{display:inline-block;width:14px;height:2px;border-radius:1px;vertical-align:middle;margin-right:6px}
+.tt{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);display:none;min-width:130px;z-index:2}
+.tt .x{color:var(--ink-3);margin-bottom:4px}.tt .r{display:flex;justify-content:space-between;gap:12px}.tt .r i{display:inline-block;width:10px;height:2px;margin-right:6px;vertical-align:middle}.tt .r b{font-weight:600}.tt .r span{color:var(--ink-2)}
+.meet{display:grid;grid-template-columns:72px 1fr;gap:14px;align-items:start}.portrait{width:72px;height:72px;border-radius:14px;background:var(--page);display:grid;place-items:center}.portrait canvas{border-radius:14px;cursor:default}
+.meet p{margin:0 0 6px;color:var(--ink-2);font-size:13px}.meet p b{color:var(--ink);font-weight:600}
+.meter{height:8px;background:color-mix(in srgb,var(--c,var(--herb)) 22%,transparent);border-radius:4px;overflow:hidden;margin:6px 0 2px}.meter div{height:100%;background:var(--c,var(--herb));border-radius:4px;transition:width .2s}
+.small{font-size:12px;color:var(--ink-3)}
+.eyes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}.eye{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--ink-2)}.eye svg{flex:none}.eye b{color:var(--ink);font-weight:600}
+footer.bar{grid-area:bar;display:flex;align-items:center;gap:12px;padding:10px 14px}
+.btn{height:38px;padding:0 16px;border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:12px;font:14px var(--font);cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.04)}.btn:hover{border-color:rgba(11,11,11,.22)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.speed{display:flex;align-items:center;gap:10px;color:var(--ink-2);font-size:13px;margin-left:10px}.speed input{width:160px;accent-color:var(--accent)}
+.share{margin-left:auto}
+.toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.2);opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>rustyWings <small>a tiny evolving world</small></h1>
+    <div class="tag">Sparrows eat seeds. Hawks eat sparrows. Nobody is programmed to do anything: every bird's brain is inherited, mutated, and kept only if it worked.</div>
+  </div>
+  <div class="chips">
+    <span class="chip"><i style="background:var(--plant)"></i>Seeds <b id="h-plant" class="tn">0</b></span>
+    <span class="chip"><i style="background:var(--herb)"></i>Sparrows <b id="h-herb" class="tn">0</b></span>
+    <span class="chip"><i style="background:var(--pred)"></i>Hawks <b id="h-pred" class="tn">0</b></span>
+  </div>
+</header>
+
+<main class="stage card">
+  <canvas id="world"></canvas>
+  <div class="welcome" id="welcome"><span class="x" id="wx">✕</span><b>Welcome.</b> Click any bird to meet it. Speed things up with the slider below and watch what the sparrows' eyes do over a few thousand ticks.</div>
+  <div class="callout" id="callout"></div>
+</main>
+
+<aside class="side">
+  <div class="card pad">
+    <h2>Right now <span>tick <span id="tick" class="tn">0</span></span></h2>
+    <div class="now">
+      <div><span class="l"><i style="background:var(--herb)"></i>Sparrows</span><span class="v tn" id="k-herb">0</span><span class="d tn" id="d-herb"></span></div>
+      <div><span class="l"><i style="background:var(--pred)"></i>Hawks</span><span class="v tn" id="k-pred">0</span><span class="d tn" id="d-pred"></span></div>
+      <div><span class="l"><i style="background:var(--plant)"></i>Seeds</span><span class="v tn" id="k-plant">0</span><span class="d tn" id="d-plant"></span></div>
+    </div>
+  </div>
+
+  <div class="card pad">
+    <h2>Who's winning? <span>populations over time</span></h2>
+    <div class="cap"><i style="background:var(--herb)"></i>Sparrows</div><div class="chart" id="c-herb"></div>
+    <div class="cap"><i style="background:var(--pred)"></i>Hawks</div><div class="chart" id="c-pred"></div>
+    <div class="cap"><i style="background:var(--plant)"></i>Seeds</div><div class="chart" id="c-plants"></div>
+    <p class="small" style="margin:8px 0 0">When sparrows boom, hawks follow. When hawks boom, sparrows crash. Nobody coded that in.</p>
+  </div>
+
+  <div class="card pad">
+    <h2>How eyes evolved <span>average field of view</span></h2>
+    <div class="legend" id="lg-fov"></div>
+    <div class="chart" id="c-fov"></div>
+    <div class="eyes">
+      <div class="eye"><svg width="34" height="34" viewBox="-17 -17 34 34"><path id="eye-h" d="" fill="#2a78d6" opacity=".18"/><circle r="4" fill="#2a78d6"/></svg><span>Sparrows see <b id="e-h">—</b> around them</span></div>
+      <div class="eye"><svg width="34" height="34" viewBox="-17 -17 34 34"><path id="eye-p" d="" fill="#eb6834" opacity=".18"/><circle r="4" fill="#eb6834"/></svg><span>Hawks focus on <b id="e-p">—</b> ahead</span></div>
+    </div>
+  </div>
+
+  <div class="card pad" id="meet">
+    <h2>Meet a bird</h2>
+    <div class="meet">
+      <div class="portrait"><canvas id="portrait" width="144" height="144" style="width:72px;height:72px"></canvas></div>
+      <div>
+        <p id="m-1"></p>
+        <p id="m-2"></p>
+        <div class="meter"><div id="m-m" style="width:0%"></div></div>
+        <div class="small" id="m-3"></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<footer class="bar card">
+  <button class="btn primary" id="play">Pause</button>
+  <div class="speed">🐢 <input type="range" id="speed" min="0" max="3" step="1" value="0"> 🐇 <span id="spd" class="tn">1×</span></div>
+  <button class="btn" id="seeds">Scatter seeds 🌱</button>
+  <button class="btn" id="meteor">Meteor 🌠</button>
+  <button class="btn share" id="share">Share this world 🔗</button>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script src="./shared.js"></script>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const S = { bg:'#f7f8f2', grid:null, patches:'rgba(27,175,122,.10)', plant:'#1baf7a', herb:'#2a78d6', pred:'#eb6834', sel:'#0b0b0b', wedge:'rgba(11,11,11,.05)', wedgeLine:'rgba(11,11,11,.25)', sprite:'bird', plantR:1.7, pad:0 };
+const INK = { primary:'#0b0b0b', secondary:'#52514e', muted:'#898781', grid:'#e1e0d9', axis:'#c3c2b7', surface:'#fcfcfb' };
+const world = Mock.createWorld({ plants:1100, herb:300, pred:26, patches:7 });
+const R = Mock.makeRenderer($('world'), S);
+const N = 150, STRIDE = 12;
+const fovH = () => Mock.degOf(Mock.mean(world.herb, a => a.fov)), fovP = () => Mock.degOf(Mock.mean(world.pred, a => a.fov));
+const hist = {
+  herb:   Mock.scaleToEnd(Mock.synthSeries(N, i => 380 + 130*Math.sin(i/22) + Mock.gauss()*8), world.herb.length),
+  pred:   Mock.scaleToEnd(Mock.synthSeries(N, i => 34 + 13*Math.sin(i/22 - 1.3) + Mock.gauss()*1.2), world.pred.length),
+  plants: Mock.scaleToEnd(Mock.synthSeries(N, i => 1150 - 260*Math.sin(i/22 + 0.9) + Mock.gauss()*20), world.plants.length),
+  fovH:   Mock.scaleToEnd(Mock.synthSeries(N, i => 150 + 50*(1-Math.exp(-i/90)) + Mock.gauss()*2.5), fovH()),
+  fovP:   Mock.scaleToEnd(Mock.synthSeries(N, i => 92 - 26*(1-Math.exp(-i/110)) + Mock.gauss()*1.5), fovP()),
+};
+const xLabel = i => i === N-1 ? 'now' : Mock.fmtInt((N-1-i)*STRIDE) + ' ticks ago';
+function push(){ for (const k in hist) hist[k].shift(); hist.herb.push(world.herb.length); hist.pred.push(world.pred.length); hist.plants.push(world.plants.length); hist.fovH.push(fovH()); hist.fovP.push(fovP()); }
+function renderCharts(){
+  const mini = { ink:INK, group:'pop', height:66, xAxis:false, ml:40, xLabel };
+  Mock.lineChart($('c-herb'),   Object.assign({}, mini, { area:true, series:[{ name:'Sparrows', color:S.herb,  values:hist.herb }] }));
+  Mock.lineChart($('c-pred'),   Object.assign({}, mini, { area:true, series:[{ name:'Hawks',    color:S.pred,  values:hist.pred }] }));
+  Mock.lineChart($('c-plants'), Object.assign({}, mini, { area:true, height:80, xAxis:true, series:[{ name:'Seeds', color:S.plant, values:hist.plants }] }));
+  Mock.lineChart($('c-fov'), { ink:INK, height:120, ml:40, xLabel, yFormat:v => Math.round(v) + '°', legendEl:$('lg-fov'),
+    series:[{ name:'Sparrows', color:S.herb, values:hist.fovH }, { name:'Hawks', color:S.pred, values:hist.fovP }] });
+  const wedge = (deg) => { const a = deg * Math.PI / 180, r = 15; const x1 = Math.cos(-a/2) * r, y1 = Math.sin(-a/2) * r, x2 = Math.cos(a/2) * r, y2 = Math.sin(a/2) * r; return `M0 0 L${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 ${a > Math.PI ? 1 : 0} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`; };
+  const fh = hist.fovH[N-1], fp = hist.fovP[N-1];
+  $('eye-h').setAttribute('d', wedge(fh)); $('eye-p').setAttribute('d', wedge(fp)); $('e-h').textContent = Math.round(fh) + '°'; $('e-p').textContent = Math.round(fp) + '°';
+}
+function delta(id, v, ref){ const d = Math.round(v - ref); $(id).textContent = d === 0 ? 'steady' : (d > 0 ? '▲ ' : '▼ ') + Mock.fmtInt(Math.abs(d)) + ' lately'; }
+// portrait
+const pctx = $('portrait').getContext('2d');
+function drawPortrait(a){
+  pctx.setTransform(1,0,0,1,0,0); pctx.clearRect(0,0,144,144);
+  const c = a.kind === 'pred' ? S.pred : S.herb, r = a.kind === 'pred' ? 22 : 18, h = -0.5, x = 72, y = 76;
+  const px = -Math.sin(h), py = Math.cos(h);
+  pctx.fillStyle = c; pctx.globalAlpha = .5; pctx.beginPath(); pctx.ellipse(x - Math.cos(h)*r*.1, y - Math.sin(h)*r*.1, r*1.9, r*.7, h + Math.PI/2, 0, Math.PI*2); pctx.fill(); pctx.globalAlpha = 1;
+  pctx.beginPath(); pctx.ellipse(x, y, r*1.15, r*.85, h, 0, Math.PI*2); pctx.fill();
+  const hx = x + Math.cos(h)*r*1.1, hy = y + Math.sin(h)*r*1.1; pctx.beginPath(); pctx.arc(hx, hy, r*.62, 0, Math.PI*2); pctx.fill();
+  pctx.fillStyle = '#e0a33a'; pctx.beginPath(); pctx.moveTo(hx + Math.cos(h)*r*1.15, hy + Math.sin(h)*r*1.15); pctx.lineTo(hx + Math.cos(h)*r*.5 + px*r*.22, hy + Math.sin(h)*r*.5 + py*r*.22); pctx.lineTo(hx + Math.cos(h)*r*.5 - px*r*.22, hy + Math.sin(h)*r*.5 - py*r*.22); pctx.closePath(); pctx.fill();
+  const ex = hx + Math.cos(h)*r*.2 + px*r*.3, ey = hy + Math.sin(h)*r*.2 + py*r*.3; pctx.fillStyle = '#fff'; pctx.beginPath(); pctx.arc(ex, ey, r*.22, 0, Math.PI*2); pctx.fill(); pctx.fillStyle = '#111'; pctx.beginPath(); pctx.arc(ex + 1, ey, r*.11, 0, Math.PI*2); pctx.fill();
+}
+let meetFor = null;
+function updateMeet(){
+  const a = world.selected; if (!a) return;
+  const name = (a.kind === 'pred' ? 'Hawk' : 'Sparrow') + ' #' + a.id;
+  $('meet').style.setProperty('--c', a.kind === 'pred' ? S.pred : S.herb);
+  if (meetFor !== a) { meetFor = a; drawPortrait(a); }
+  $('m-1').innerHTML = `<b>${name}</b> is ${Mock.fmtInt(a.age)} ticks old, ${a.gen === 0 ? 'one of the founders' : 'generation ' + a.gen}, and has ${a.children === 0 ? 'no chicks yet' : a.children + (a.children === 1 ? ' chick' : ' chicks')}.`;
+  $('m-2').innerHTML = a.kind === 'pred' ? `Sees a narrow <b>${Mock.degOf(a.fov)}°</b> cone out to <b>${(a.range*100).toFixed(0)}%</b> of the world. A hunter's eyes.` : `Sees <b>${Mock.degOf(a.fov)}°</b> around ${a.id % 2 ? 'her' : 'him'}. Wide eyes mean fewer surprises from hawks.`;
+  $('m-m').style.width = Math.round(a.energy*100) + '%';
+  $('m-3').textContent = 'Energy ' + Math.round(a.energy*100) + '% · ' + (a.energy > 0.9 ? 'ready to have a chick' : a.energy < 0.2 ? 'starving' : a.lastMeal ? 'last ate ' + Mock.fmtInt(world.tick - a.lastMeal) + ' ticks ago' : 'has not eaten yet');
+  const co = $('callout'), p = R.toScreen(a), st = $('world').parentElement.getBoundingClientRect();
+  co.style.left = (p.x - st.left + 18) + 'px'; co.style.top = (p.y - st.top - 16) + 'px';
+  co.innerHTML = `<b>${name}</b> · ${a.kind === 'pred' ? 'hunting' : a.target ? 'heading for a seed' : 'wandering'} · ${Math.round(a.energy*100)}% energy`;
+}
+// controls
+let speed = 1, playing = true, frames = 0, stepsAcc = 0, sinceHist = 0, lastSec = performance.now(), lastChart = 0;
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; };
+$('speed').oninput = () => { speed = [1,4,16,64][+$('speed').value]; $('spd').textContent = speed === 64 ? 'max' : speed + '×'; };
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2200); }
+$('seeds').onclick = () => { const p = world.patches[Math.floor(Mock.rand()*world.patches.length)]; for (let i = 0; i < 160; i++) world.plants.push({ x: ((p.x + Mock.gauss()*p.r) % 1 + 1) % 1, y: ((p.y + Mock.gauss()*p.r) % 1 + 1) % 1 }); toast('160 seeds scattered'); };
+$('meteor').onclick = () => { const cx = Mock.rand(), cy = Mock.rand(), r2 = 0.2*0.2; let n = 0; for (const list of [world.herb, world.pred]) for (let i = list.length-1; i >= 0; i--) { const a = list[i], dx = a.x-cx, dy = a.y-cy; if (dx*dx+dy*dy < r2) { list.splice(i,1); n++; } } world.plants = world.plants.filter(p => { const dx = p.x-cx, dy = p.y-cy; return dx*dx+dy*dy >= r2; }); if (world.selected && (world.herb.indexOf(world.selected) < 0 && world.pred.indexOf(world.selected) < 0)) world.selected = null; toast('Meteor strike: ' + n + ' birds lost'); };
+$('share').onclick = () => toast('Link copied · rustywings.dev/?seed=0x7f3a2c11&t=' + world.tick);
+$('wx').onclick = () => $('welcome').remove();
+$('world').addEventListener('click', e => { const a = R.pick(e.clientX, e.clientY, world); if (a) world.selected = a; });
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); $('play').click(); } });
+function frame(now){
+  if (playing) { for (let i = 0; i < speed; i++) Mock.step(world); stepsAcc += speed; sinceHist += speed; }
+  while (sinceHist >= STRIDE) { push(); sinceHist -= STRIDE; }
+  R.draw(world, world.tick);
+  $('tick').textContent = Mock.fmtInt(world.tick);
+  $('h-herb').textContent = $('k-herb').textContent = Mock.fmtInt(world.herb.length);
+  $('h-pred').textContent = $('k-pred').textContent = Mock.fmtInt(world.pred.length);
+  $('h-plant').textContent = $('k-plant').textContent = Mock.fmtInt(world.plants.length);
+  updateMeet();
+  if (now - lastChart > 160) { renderCharts(); lastChart = now; }
+  frames++;
+  if (now - lastSec >= 1000) { frames = 0; stepsAcc = 0; lastSec = now; delta('d-herb', world.herb.length, hist.herb[N-26]); delta('d-pred', world.pred.length, hist.pred[N-26]); delta('d-plant', world.plants.length, hist.plants[N-26]); }
+  requestAnimationFrame(frame);
+}
+renderCharts(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

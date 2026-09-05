@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rustyWings · UI direction mockups</title>
+<style>
+:root{color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--ink-3:#898781;--border:rgba(255,255,255,.10);--accent:#3987e5}
+*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:48px 24px}
+.wrap{max-width:980px;margin:0 auto}h1{font-size:22px;margin:0 0 6px}.sub{color:var(--ink-2);margin:0 0 28px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+a.card{display:block;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;color:inherit;text-decoration:none}a.card:hover{border-color:rgba(255,255,255,.25)}
+.card h2{margin:0 0 4px;font-size:16px}.card .k{color:var(--ink-3);font-size:12px;margin-bottom:10px}.card p{margin:0;color:var(--ink-2);font-size:13px}
+.card .sw{display:flex;gap:4px;margin-top:14px}.card .sw i{width:22px;height:22px;border-radius:5px;display:inline-block;border:1px solid var(--border)}
+h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:36px 0 10px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}th{color:var(--ink-3);font-weight:500}td:first-child{color:var(--ink-2);white-space:nowrap}
+.note{color:var(--ink-3);font-size:13px;margin-top:28px}kbd{font:11px ui-monospace,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>rustyWings · UI direction mockups</h1>
+  <p class="sub">Three directions for the rebuilt frontend. All three run the same fake ecosystem and the same chart engine, so the comparison is layout, tone, and what a visitor is invited to do. Nothing here is the real simulation.</p>
+  <div class="grid">
+    <a class="card" href="./a-observatory.html">
+      <h2>A · Observatory</h2>
+      <div class="k">Scientific dashboard · dark</div>
+      <p>Canvas center, dense right rail: KPI tiles, small-multiple population charts, FOV trend, inspector with genome heatmap, parameter sliders. Status bar with UPS, FPS, and shortcuts.</p>
+      <div class="sw"><i style="background:#0d0d0d"></i><i style="background:#1a1a19"></i><i style="background:#3987e5"></i><i style="background:#d95926"></i><i style="background:#199e70"></i></div>
+    </a>
+    <a class="card" href="./b-console.html">
+      <h2>B · Console</h2>
+      <div class="k">Dashboard + command line · dark, monospace</div>
+      <p>Same charts, slimmer rail. A devtools-style console drawer logs ecosystem events and takes typed commands with Tab completion. A <kbd>⌘K</kbd> palette replaces sliders. Homage to the current terminal.</p>
+      <div class="sw"><i style="background:#0d0d0d"></i><i style="background:#1a1a19"></i><i style="background:#3987e5"></i><i style="background:#d95926"></i><i style="background:#fab219"></i></div>
+    </a>
+    <a class="card" href="./c-fieldguide.html">
+      <h2>C · Field Guide</h2>
+      <div class="k">Playful and illustrative · light</div>
+      <p>Warm light theme, bird sprites instead of triangles, plain-language copy, a "Meet a bird" card that narrates the selected agent, callouts on the canvas, and big friendly controls including a meteor button.</p>
+      <div class="sw"><i style="background:#f4f3ee"></i><i style="background:#fcfcfb"></i><i style="background:#2a78d6"></i><i style="background:#eb6834"></i><i style="background:#1baf7a"></i></div>
+    </a>
+  </div>
+
+  <h3>What differs</h3>
+  <table>
+    <tr><th></th><th>A · Observatory</th><th>B · Console</th><th>C · Field Guide</th></tr>
+    <tr><td>Audience</td><td>Engineers and hiring managers scanning for rigor</td><td>Power users; people who like terminals</td><td>Anyone, including non-technical visitors</td></tr>
+    <tr><td>Primary control</td><td>Sliders and toggles in the rail</td><td>Typed commands, palette, log</td><td>Big buttons and one speed slider</td></tr>
+    <tr><td>Agent rendering</td><td>Triangles, selected agent shows vision cone</td><td>Triangles</td><td>Illustrated birds with flapping wings</td></tr>
+    <tr><td>Inspector</td><td>Full: energy, traits, genome heatmap, actions</td><td>Compact key/value plus heatmap</td><td>Narrated portrait card and canvas callout</td></tr>
+    <tr><td>Best showcases</td><td>Observability, determinism, performance HUD</td><td>Scriptability, snapshots, benchmarks</td><td>Product sense, explanation, delight</td></tr>
+    <tr><td>Risk</td><td>Can read as generic dashboard</td><td>Intimidating to casual visitors</td><td>Can read as less technical</td></tr>
+  </table>
+
+  <h3>What is the same everywhere</h3>
+  <table>
+    <tr><td>Palette</td><td colspan="3">Herbivores blue, predators orange, plants aqua: the first three slots of a colorblind-validated categorical palette, stepped separately for dark and light surfaces. Text never wears a series color.</td></tr>
+    <tr><td>Charts</td><td colspan="3">Populations use small multiples with a linked crosshair instead of one axis for 30 hawks and 1,200 seeds. Two-pixel lines, hairline grid, end labels, legend only where there are two or more series, hover tooltip listing every series, table view available.</td></tr>
+    <tr><td>Interaction</td><td colspan="3">Click an agent to select it. <kbd>Space</kbd> pauses. The selected agent shows its field-of-view wedge.</td></tr>
+  </table>
+  <p class="note">Hybrids are fine: for example A's rail with B's console drawer, or A's layout with C's sprites. Say which pieces.</p>
+</div>
+</body>
+</html>

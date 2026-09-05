@@ -1,4 +1,15 @@
 # rustyWings
+
+> **Rebuild in progress.** rustyWings is being rebuilt from a tutorial-derived
+> genetic-algorithm demo into an open-ended, co-evolving ecosystem simulator:
+> energy, reproduction and death instead of generations; sparrows *and* hawks;
+> heritable body traits; a deterministic core that produces identical results
+> natively and in WebAssembly; a headless CLI with a benchmark and a learning
+> test that CI runs on every push. The new code lives in `crates/`, the design
+> in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
+> [`docs/decisions/`](docs/decisions/). The text below describes the currently
+> deployed original app, which stays live until the new frontend replaces it.
+
 ## Neural Network Bird Simulation
 
 ----

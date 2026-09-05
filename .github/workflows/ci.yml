@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  rust:
+    name: fmt · clippy · test · wasm check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # Formatting and lints are enforced on the rebuilt crates only. The legacy
+      # `libs/` crates still build and test but are slated for removal.
+      - run: cargo fmt -p rustywings-core -p rustywings-cli --check
+      - run: cargo clippy -p rustywings-core -p rustywings-cli --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo check -p rustywings-core --target wasm32-unknown-unknown
+
+  determinism:
+    name: identical checksum on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The golden checksum lives in the crate's own tests; running them on three
+      # operating systems is the proof that a seed means the same thing everywhere.
+      - run: cargo test -p rustywings-core golden --release
+
+  learning:
+    name: evolved sparrows beat random ones
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p rustywings-cli
+      - run: ./target/release/rustywings arena --seeds 3 --ticks 30000 --samples 24 --arena-ticks 1500 --threshold 1.3
+      - run: ./target/release/rustywings bench --agents 5000 --ticks 200

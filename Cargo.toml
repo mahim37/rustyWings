@@ -2,6 +2,20 @@
 resolver = "2"
 
 members = [
-    "libs/*",
+    "libs/*",   # legacy shorelark-derived crates; removed once the new frontend ships
+    "crates/*", # the rebuild: rustywings-core, rustywings-cli, rustywings-wasm
 ]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
+# The simulation is numerically heavy; unoptimised debug builds make the test
+# suite crawl. opt-level 1 keeps debuginfo and fast incremental builds.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
 

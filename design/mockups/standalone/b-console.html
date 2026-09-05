@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rustyWings · mockup B · Console</title>
+<style>
+:root{color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--ink-3:#898781;--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);
+--herb:#3987e5;--pred:#d95926;--plant:#199e70;--accent:#3987e5;--warn:#fab219;--font:system-ui,-apple-system,"Segoe UI",sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--page);color:var(--ink);font:13px/1.4 var(--font);display:grid;grid-template-rows:44px 1fr 212px 26px;grid-template-columns:1fr 336px;grid-template-areas:"top top" "stage rail" "console console" "status status";overflow:hidden}
+.tn{font-variant-numeric:tabular-nums}
+header.top{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid var(--border);background:var(--surface)}
+.wordmark{font:600 13px var(--mono)}.wordmark span{color:var(--ink-3);font-weight:400}
+.crumb{font:12px var(--mono);color:var(--ink-3)}.crumb b{color:var(--ink-2);font-weight:500}
+.transport{margin-left:auto;display:flex;align-items:center;gap:6px}
+.btn{height:26px;min-width:26px;padding:0 9px;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);border-radius:5px;font:12px var(--mono);cursor:pointer}
+.btn:hover{color:var(--ink);border-color:rgba(255,255,255,.22)}.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+kbd{font:11px var(--mono);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--ink-2)}
+main.stage{grid-area:stage;display:grid;place-items:center;position:relative;overflow:hidden}
+canvas{display:block;cursor:crosshair}
+.hud{position:absolute;left:14px;top:10px;display:flex;flex-direction:column;gap:4px;font:12px var(--mono);color:var(--ink-2)}.hud i{display:inline-block;width:8px;height:8px;margin-right:8px;vertical-align:middle;border-radius:1px}.hud b{color:var(--ink);font-weight:500}
+aside.rail{grid-area:rail;border-left:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:12px 14px 20px;display:flex;flex-direction:column;gap:16px}
+section h2{margin:0 0 6px;font:600 11px var(--mono);letter-spacing:.04em;text-transform:lowercase;color:var(--ink-3)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tile{background:var(--page);border:1px solid var(--border);border-radius:6px;padding:8px 10px}.tile .l{color:var(--ink-3);font:11px var(--mono)}.tile .v{font-size:20px;font-weight:600;margin-top:2px;line-height:1.1}
+.cap{display:flex;align-items:center;gap:6px;color:var(--ink-2);font:12px var(--mono);margin:6px 0 0}.cap i{width:14px;height:2px;display:inline-block}
+.chart{position:relative}.chart svg{display:block;width:100%}
+.legend{display:flex;gap:14px;margin-bottom:2px;color:var(--ink-2);font:12px var(--mono)}.legend b{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px}
+.tt{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font:12px var(--mono);box-shadow:0 6px 20px rgba(0,0,0,.45);display:none;min-width:130px;z-index:2}
+.tt .x{color:var(--ink-3);margin-bottom:4px}.tt .r{display:flex;justify-content:space-between;gap:12px}.tt .r i{display:inline-block;width:10px;height:2px;margin-right:6px;vertical-align:middle}.tt .r b{font-weight:600}.tt .r span{color:var(--ink-2)}
+.insp{font:12px var(--mono);color:var(--ink-2);background:var(--page);border:1px solid var(--border);border-radius:6px;padding:10px}
+.insp .hd{display:flex;gap:8px;align-items:center;color:var(--ink);margin-bottom:6px}.insp .hd i{width:10px;height:10px;display:inline-block;clip-path:polygon(0 0,100% 50%,0 100%)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px}.kv b{color:var(--ink);font-weight:500;text-align:right}
+.brain{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;margin-top:8px}.brain div{aspect-ratio:1;border-radius:1px}
+.console{grid-area:console;border-top:1px solid var(--border);background:var(--surface);display:grid;grid-template-rows:1fr auto;font:12px var(--mono);min-height:0}
+.log{overflow-y:auto;padding:8px 14px;color:var(--ink-2);min-height:0}.log div{white-space:pre;line-height:1.55}.log .t{color:var(--ink-3)}.log .k{color:var(--ink)}.log .w{color:var(--warn)}.log .cmd{color:var(--ink)}.log .cmd::before{content:"❯ ";color:var(--accent)}.log i{display:inline-block;width:7px;height:7px;margin:0 6px 0 0;vertical-align:middle;border-radius:1px}
+.prompt{display:flex;align-items:center;gap:8px;padding:6px 14px 8px;border-top:1px solid var(--border)}.prompt .ps{color:var(--accent)}.prompt input{flex:1;background:transparent;border:0;outline:0;color:var(--ink);font:12px var(--mono)}.prompt .ghost{color:var(--ink-3);pointer-events:none;position:absolute;left:34px}.prompt .hintk{color:var(--ink-3)}
+.prompt .wrap{flex:1;position:relative;display:flex}
+footer.status{grid-area:status;display:flex;align-items:center;gap:16px;padding:0 14px;border-top:1px solid var(--border);background:var(--page);color:var(--ink-3);font:11px var(--mono)}footer b{color:var(--ink-2);font-weight:500}.keys{margin-left:auto;display:flex;gap:12px}
+/* command palette */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;justify-content:center;align-items:flex-start;padding-top:12vh;z-index:10}
+.pal{width:560px;background:var(--surface);border:1px solid rgba(255,255,255,.16);border-radius:10px;box-shadow:0 24px 80px rgba(0,0,0,.6);overflow:hidden}
+.pal .in{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}.pal .in span{color:var(--accent);font:14px var(--mono)}.pal input{flex:1;background:transparent;border:0;outline:0;color:var(--ink);font:14px var(--mono)}
+.pal ul{list-style:none;margin:0;padding:6px;max-height:340px;overflow:auto}.pal li{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:8px 10px;border-radius:6px;font:12px var(--mono);color:var(--ink-2)}.pal li.sel{background:rgba(57,135,229,.16);color:var(--ink)}.pal li .d{color:var(--ink-3);font-family:var(--font)}.pal li .c{color:var(--ink)}.pal li.sel .d{color:var(--ink-2)}
+.pal .ft{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--border);color:var(--ink-3);font-size:11px}.pal .ft span{display:flex;gap:6px;align-items:center}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wordmark">rustywings<span>/ecosystem</span></div>
+  <div class="crumb">seed <b>0x7f3a2c11</b> · tick <b id="tick" class="tn">0</b> · speed <b id="spd">1×</b> · snapshot <b>#3 @ 46,800</b></div>
+  <div class="transport">
+    <button class="btn on" id="play">⏸ pause</button>
+    <button class="btn" id="stepbtn">step</button>
+    <button class="btn" id="palbtn">⌘K commands</button>
+  </div>
+</header>
+
+<main class="stage">
+  <canvas id="world"></canvas>
+  <div class="hud tn">
+    <div><i style="background:var(--herb)"></i>herb <b id="h-herb">0</b></div>
+    <div><i style="background:var(--pred)"></i>pred <b id="h-pred">0</b></div>
+    <div><i style="background:var(--plant)"></i>plant <b id="h-plant">0</b></div>
+  </div>
+</main>
+
+<aside class="rail">
+  <section>
+    <h2>population</h2>
+    <div class="kpis">
+      <div class="tile"><div class="l">herb</div><div class="v tn" id="k-herb">0</div></div>
+      <div class="tile"><div class="l">pred</div><div class="v tn" id="k-pred">0</div></div>
+      <div class="tile"><div class="l">plant</div><div class="v tn" id="k-plant">0</div></div>
+    </div>
+    <div class="cap"><i style="background:var(--herb)"></i>herbivores</div><div class="chart" id="c-herb"></div>
+    <div class="cap"><i style="background:var(--pred)"></i>predators</div><div class="chart" id="c-pred"></div>
+    <div class="cap"><i style="background:var(--plant)"></i>plants</div><div class="chart" id="c-plants"></div>
+  </section>
+  <section>
+    <h2>mean fov (deg)</h2>
+    <div class="legend" id="lg-fov"></div>
+    <div class="chart" id="c-fov"></div>
+  </section>
+  <section>
+    <h2>selected</h2>
+    <div class="insp" id="insp">
+      <div class="hd"><i id="i-swatch"></i><span id="i-name">—</span></div>
+      <div class="kv tn">
+        <span>energy</span><b id="i-e"></b>
+        <span>age</span><b id="i-age"></b>
+        <span>gen</span><b id="i-gen"></b>
+        <span>offspring</span><b id="i-kids"></b>
+        <span>fov</span><b id="i-fov"></b>
+        <span>range</span><b id="i-rng"></b>
+        <span>speed</span><b id="i-spd"></b>
+      </div>
+      <div class="brain" id="brain"></div>
+    </div>
+  </section>
+</aside>
+
+<div class="console">
+  <div class="log" id="log"></div>
+  <div class="prompt">
+    <span class="ps">❯</span>
+    <div class="wrap"><input id="cmd" autocomplete="off" spellcheck="false" placeholder="type a command · Tab completes · ↑ history · ⌘K palette"><span class="ghost" id="ghost"></span></div>
+    <span class="hintk"><kbd>Tab</kbd></span>
+  </div>
+</div>
+
+<footer class="status">
+  <span>ups <b id="ups" class="tn">0</b></span><span>fps <b id="fps" class="tn">60</b></span><span>agents <b id="na" class="tn">0</b></span><span>grid 64×64</span><span>wasm 118 KB · worker · SAB</span>
+  <div class="keys"><span><kbd>Space</kbd> pause</span><span><kbd>.</kbd> step</span><span><kbd>/</kbd> prompt</span><span><kbd>⌘K</kbd> palette</span></div>
+</footer>
+
+<div class="overlay" id="overlay">
+  <div class="pal">
+    <div class="in"><span>❯</span><input id="palin" autocomplete="off" spellcheck="false" value="set mut" placeholder="Search commands…"></div>
+    <ul id="pallist"></ul>
+    <div class="ft"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> run</span><span><kbd>Esc</kbd> close</span><span style="margin-left:auto">shown open for the mockup · click outside to close</span></div>
+  </div>
+</div>
+
+<script>
+/* rustyWings UI mockups — shared fake-simulation + chart engine.
+   Throwaway code for design review only; the real sim lives in Rust/wasm. */
+(function (global) {
+  'use strict';
+  const TAU = Math.PI * 2;
+
+  // ---------- deterministic RNG (mulberry32) ----------
+  let seed = 0x7f3a2c11;
+  function rand() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function gauss() {
+    let u = 0, v = 0;
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+  }
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const wrap1 = (x) => ((x % 1) + 1) % 1;
+  const nf = new Intl.NumberFormat('en-US');
+  const fmtInt = (n) => nf.format(Math.round(n));
+  const compact = (n) => Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
+    : Math.abs(n) >= 1e4 ? (n / 1e3).toFixed(1) + 'K' : fmtInt(n);
+  const degOf = (r) => Math.round(r * 180 / Math.PI);
+  const mean = (arr, f) => arr.length ? arr.reduce((s, a) => s + f(a), 0) / arr.length : 0;
+
+  // ---------- torus geometry ----------
+  function d2(a, b) {
+    let dx = a.x - b.x, dy = a.y - b.y;
+    if (dx > 0.5) dx -= 1; else if (dx < -0.5) dx += 1;
+    if (dy > 0.5) dy -= 1; else if (dy < -0.5) dy += 1;
+    return dx * dx + dy * dy;
+  }
+  function angleTo(a, b) {
+    let dx = b.x - a.x, dy = b.y - a.y;
+    if (dx > 0.5) dx -= 1; else if (dx < -0.5) dx += 1;
+    if (dy > 0.5) dy -= 1; else if (dy < -0.5) dy += 1;
+    return Math.atan2(dy, dx);
+  }
+  function nearest(list, a, range) {
+    let best = null, bd = range * range;
+    for (let i = 0; i < list.length; i++) {
+      const q = d2(a, list[i]);
+      if (q < bd) { bd = q; best = list[i]; }
+    }
+    return best;
+  }
+
+  // ---------- fake world ----------
+  let nextId = 4021;
+  function spawnAgent(kind, parent) {
+    const a = {
+      id: nextId++, kind,
+      x: parent ? parent.x : rand(), y: parent ? parent.y : rand(),
+      h: rand() * TAU,
+      energy: parent ? 0.45 : 0.5 + rand() * 0.35,
+      age: 0, gen: parent ? parent.gen + 1 : 0, children: 0,
+      target: null, retarget: Math.floor(rand() * 8), lastMeal: 0,
+      spd: kind === 'pred' ? 0.0021 : 0.0013,
+      fov: kind === 'pred' ? 1.4 : 2.9,
+      range: kind === 'pred' ? 0.13 : 0.075,
+      size: kind === 'pred' ? 1.0 : 0.7,
+      genome: null,
+    };
+    if (parent) {
+      a.spd = clamp(parent.spd * (1 + gauss() * 0.04), 0.0006, 0.0034);
+      a.fov = clamp(parent.fov + gauss() * 0.08, 0.5, 5.6);
+      a.range = clamp(parent.range + gauss() * 0.004, 0.03, 0.2);
+      a.size = clamp(parent.size + gauss() * 0.03, 0.4, 1.4);
+      a.genome = parent.genome.map(g => rand() < 0.08 ? clamp(g + gauss() * 0.3, -2, 2) : g);
+    } else {
+      a.spd *= 0.85 + rand() * 0.3;
+      a.fov = clamp(a.fov + gauss() * 0.3, 0.5, 5.6);
+      a.genome = Array.from({ length: 54 }, () => clamp(gauss() * 0.7, -2, 2));
+    }
+    return a;
+  }
+  function spawnPlant(w) {
+    const p = w.patches[Math.floor(rand() * w.patches.length)];
+    return { x: wrap1(p.x + gauss() * p.r), y: wrap1(p.y + gauss() * p.r) };
+  }
+  function createWorld(o) {
+    const w = { tick: 0, plants: [], herb: [], pred: [], patches: [], births: 0, deaths: 0, selected: null, cap: o.plantCap || 1500 };
+    for (let i = 0; i < (o.patches || 8); i++) w.patches.push({ x: rand(), y: rand(), r: 0.03 + rand() * 0.05 });
+    for (let i = 0; i < o.plants; i++) w.plants.push(spawnPlant(w));
+    for (let i = 0; i < o.herb; i++) w.herb.push(spawnAgent('herb', null));
+    for (let i = 0; i < o.pred; i++) w.pred.push(spawnAgent('pred', null));
+    w.selected = w.herb[3] || null;
+    return w;
+  }
+  function steer(a, target, gain) {
+    if (target) {
+      const want = angleTo(a, target);
+      let d = want - a.h; d = Math.atan2(Math.sin(d), Math.cos(d));
+      a.h += clamp(d, -gain, gain);
+    } else {
+      a.h += gauss() * 0.06;
+    }
+    a.x = wrap1(a.x + Math.cos(a.h) * a.spd);
+    a.y = wrap1(a.y + Math.sin(a.h) * a.spd);
+  }
+  function step(w) {
+    w.tick++;
+    const grow = 0.9 * (1 - w.plants.length / w.cap);
+    if (rand() < grow) w.plants.push(spawnPlant(w));
+    if (w.tick % 400 === 0) for (const p of w.patches) { p.x = wrap1(p.x + gauss() * 0.01); p.y = wrap1(p.y + gauss() * 0.01); }
+
+    const pressure = w.herb.length / 420;
+    for (let i = w.herb.length - 1; i >= 0; i--) {
+      const a = w.herb[i];
+      if ((w.tick + a.retarget) % 8 === 0 || (a.target && w.plants.indexOf(a.target) < 0)) a.target = nearest(w.plants, a, a.range);
+      steer(a, a.target, 0.12);
+      a.age++; a.energy -= 0.00045 + a.spd * 0.06 * pressure;
+      if (a.target && d2(a, a.target) < 0.005 * 0.005) {
+        const k = w.plants.indexOf(a.target); if (k >= 0) w.plants.splice(k, 1);
+        a.target = null; a.energy = Math.min(1, a.energy + 0.14); a.lastMeal = w.tick;
+      }
+      if (a.energy > 0.9 && rand() < 0.03) { a.energy -= 0.42; a.children++; w.herb.push(spawnAgent('herb', a)); w.births++; }
+      if (a.energy <= 0 || a.age > 7000) { w.herb.splice(i, 1); w.deaths++; if (w.selected === a) w.selected = null; }
+    }
+    for (let i = w.pred.length - 1; i >= 0; i--) {
+      const a = w.pred[i];
+      if ((w.tick + a.retarget) % 6 === 0 || (a.target && w.herb.indexOf(a.target) < 0)) a.target = nearest(w.herb, a, a.range);
+      steer(a, a.target, 0.09);
+      a.age++; a.energy -= 0.00075 + a.spd * 0.05;
+      if (a.target && d2(a, a.target) < 0.006 * 0.006) {
+        const k = w.herb.indexOf(a.target);
+        if (k >= 0) { if (w.selected === w.herb[k]) w.selected = null; w.herb.splice(k, 1); w.deaths++; }
+        a.target = null; a.energy = Math.min(1, a.energy + 0.45); a.lastMeal = w.tick;
+      }
+      if (a.energy > 0.88 && rand() < 0.02 && w.pred.length < 90) { a.energy -= 0.4; a.children++; w.pred.push(spawnAgent('pred', a)); w.births++; }
+      if (a.energy <= 0 || a.age > 9000) { w.pred.splice(i, 1); w.deaths++; if (w.selected === a) w.selected = null; }
+    }
+    if (w.herb.length < 40) w.herb.push(spawnAgent('herb', null));
+    if (w.pred.length < 6) w.pred.push(spawnAgent('pred', null));
+    if (!w.selected) w.selected = w.herb[Math.floor(rand() * w.herb.length)] || null;
+  }
+
+  // ---------- canvas renderer ----------
+  function makeRenderer(canvas, style) {
+    const ctx = canvas.getContext('2d');
+    let size = 64, dpr = 1;
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      const r = canvas.parentElement.getBoundingClientRect();
+      const pad = style.pad || 0;
+      size = Math.max(64, Math.floor(Math.min(r.width, r.height) - pad * 2));
+      canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+      canvas.width = Math.round(size * dpr); canvas.height = Math.round(size * dpr);
+    }
+    resize(); window.addEventListener('resize', resize);
+
+    function tri(x, y, h, L) {
+      ctx.moveTo(x + Math.cos(h) * L, y + Math.sin(h) * L);
+      ctx.lineTo(x + Math.cos(h + 2.5) * L * 0.85, y + Math.sin(h + 2.5) * L * 0.85);
+      ctx.lineTo(x + Math.cos(h - 2.5) * L * 0.85, y + Math.sin(h - 2.5) * L * 0.85);
+      ctx.closePath();
+    }
+    function bird(a, x, y, r, color, t) {
+      const h = a.h, px = -Math.sin(h), py = Math.cos(h);
+      const flap = Math.sin(t * 0.25 + a.id) * 0.5;
+      ctx.fillStyle = color; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.ellipse(x - Math.cos(h) * r * 0.1, y - Math.sin(h) * r * 0.1, r * 1.9, r * (0.55 + flap * 0.3), h + Math.PI / 2, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.ellipse(x, y, r * 1.15, r * 0.85, h, 0, TAU); ctx.fill();
+      const hx = x + Math.cos(h) * r * 1.1, hy = y + Math.sin(h) * r * 1.1;
+      ctx.beginPath(); ctx.arc(hx, hy, r * 0.62, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#e0a33a'; ctx.beginPath();
+      ctx.moveTo(hx + Math.cos(h) * r * 1.15, hy + Math.sin(h) * r * 1.15);
+      ctx.lineTo(hx + Math.cos(h) * r * 0.5 + px * r * 0.22, hy + Math.sin(h) * r * 0.5 + py * r * 0.22);
+      ctx.lineTo(hx + Math.cos(h) * r * 0.5 - px * r * 0.22, hy + Math.sin(h) * r * 0.5 - py * r * 0.22);
+      ctx.closePath(); ctx.fill();
+      const ex = hx + Math.cos(h) * r * 0.2 + px * r * 0.3, ey = hy + Math.sin(h) * r * 0.2 + py * r * 0.3;
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, r * 0.22, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(ex + Math.cos(h) * r * 0.06, ey + Math.sin(h) * r * 0.06, r * 0.11, 0, TAU); ctx.fill();
+    }
+    function draw(w, t) {
+      const s = canvas.width;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = style.bg; ctx.fillRect(0, 0, s, s);
+      if (style.grid) {
+        ctx.strokeStyle = style.grid; ctx.lineWidth = 1; ctx.beginPath();
+        const n = style.gridN || 32;
+        for (let i = 1; i < n; i++) { const p = Math.round(i * s / n) + 0.5; ctx.moveTo(p, 0); ctx.lineTo(p, s); ctx.moveTo(0, p); ctx.lineTo(s, p); }
+        ctx.stroke();
+      }
+      if (style.patches) {
+        for (const p of w.patches) {
+          const R = p.r * 2.4 * s;
+          const g = ctx.createRadialGradient(p.x * s, p.y * s, 0, p.x * s, p.y * s, R);
+          g.addColorStop(0, style.patches); g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g; ctx.fillRect(p.x * s - R, p.y * s - R, R * 2, R * 2);
+        }
+      }
+      const pr = (style.plantR || 1.4) * dpr;
+      ctx.fillStyle = style.plant; ctx.beginPath();
+      for (const p of w.plants) { const x = p.x * s, y = p.y * s; ctx.moveTo(x + pr, y); ctx.arc(x, y, pr, 0, TAU); }
+      ctx.fill();
+      if (style.sprite === 'bird') {
+        for (const a of w.herb) bird(a, a.x * s, a.y * s, 3.4 * dpr * a.size / 0.7, style.herb, t);
+        for (const a of w.pred) bird(a, a.x * s, a.y * s, 4.8 * dpr * a.size, style.pred, t);
+      } else {
+        ctx.fillStyle = style.herb; ctx.beginPath();
+        for (const a of w.herb) tri(a.x * s, a.y * s, a.h, 5 * dpr * a.size / 0.7);
+        ctx.fill();
+        ctx.fillStyle = style.pred; ctx.beginPath();
+        for (const a of w.pred) tri(a.x * s, a.y * s, a.h, 7.5 * dpr * a.size);
+        ctx.fill();
+      }
+      const sel = w.selected;
+      if (sel) {
+        const x = sel.x * s, y = sel.y * s, R = sel.range * s;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, R, sel.h - sel.fov / 2, sel.h + sel.fov / 2); ctx.closePath();
+        ctx.fillStyle = style.wedge; ctx.fill();
+        ctx.strokeStyle = style.wedgeLine || style.sel; ctx.lineWidth = 1 * dpr; ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, 11 * dpr, 0, TAU); ctx.strokeStyle = style.sel; ctx.lineWidth = 1.5 * dpr; ctx.stroke();
+      }
+    }
+    function pick(clientX, clientY, w) {
+      const r = canvas.getBoundingClientRect();
+      const pt = { x: (clientX - r.left) / r.width, y: (clientY - r.top) / r.height };
+      let best = null, bd = 0.02 * 0.02;
+      for (const a of w.pred) { const q = d2(pt, a); if (q < bd) { bd = q; best = a; } }
+      for (const a of w.herb) { const q = d2(pt, a); if (q < bd) { bd = q; best = a; } }
+      return best;
+    }
+    function toScreen(a) {
+      const r = canvas.getBoundingClientRect();
+      return { x: r.left + a.x * r.width, y: r.top + a.y * r.height };
+    }
+    return { draw, resize, pick, toScreen, canvas };
+  }
+
+  // ---------- charts (SVG, hover layer, linked crosshair) ----------
+  const NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+  }
+  const groups = {};
+  function setGroup(origin, j) {
+    const list = origin.group ? groups[origin.group] : [origin];
+    for (const c of list) { c.idx = j; if (c.setIndex) c.setIndex(j); }
+  }
+  function lineChart(root, opts) {
+    let inst = root.__chart;
+    if (!inst) {
+      root.innerHTML = '';
+      const svg = document.createElementNS(NS, 'svg'); root.appendChild(svg);
+      const tt = document.createElement('div'); tt.className = 'tt'; root.appendChild(tt);
+      inst = root.__chart = { svg, tt, idx: -1, group: opts.group };
+      if (opts.group) (groups[opts.group] = groups[opts.group] || []).push(inst);
+      svg.addEventListener('pointermove', (e) => {
+        const r = svg.getBoundingClientRect();
+        const i = Math.round(((e.clientX - r.left) - inst.ml) / inst.pw * (inst.n - 1));
+        setGroup(inst, clamp(i, 0, inst.n - 1));
+      });
+      svg.addEventListener('pointerleave', () => setGroup(inst, -1));
+    }
+    const { svg, tt } = inst;
+    const W = Math.max(120, root.clientWidth), H = opts.height || 120;
+    const ml = opts.ml == null ? 36 : opts.ml, mr = opts.mr == null ? 52 : opts.mr, mt = 8, mb = opts.xAxis === false ? 6 : 18;
+    const pw = W - ml - mr, ph = H - mt - mb;
+    const series = opts.series, n = series[0].values.length, ink = opts.ink, fmt = opts.yFormat || compact;
+    let maxV = 0; for (const s of series) for (const v of s.values) if (v > maxV) maxV = v;
+    const yMax = niceMax(maxV * 1.08);
+    const X = (i) => ml + (n > 1 ? i / (n - 1) : 0) * pw, Y = (v) => mt + ph - (v / yMax) * ph;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+    svg.innerHTML = '';
+    for (const tv of [yMax / 2, yMax]) {
+      el('line', { x1: ml, x2: ml + pw, y1: Y(tv), y2: Y(tv), stroke: ink.grid, 'stroke-width': 1 }, svg);
+      el('text', { x: ml - 6, y: Y(tv) + 3.5, fill: ink.muted, 'font-size': 10, 'text-anchor': 'end', class: 'tn' }, svg).textContent = fmt(tv);
+    }
+    el('line', { x1: ml, x2: ml + pw, y1: Y(0), y2: Y(0), stroke: ink.axis, 'stroke-width': 1 }, svg);
+    el('text', { x: ml - 6, y: Y(0) + 3.5, fill: ink.muted, 'font-size': 10, 'text-anchor': 'end', class: 'tn' }, svg).textContent = '0';
+    if (opts.xAxis !== false && opts.xLabel) {
+      el('text', { x: ml, y: H - 4, fill: ink.muted, 'font-size': 10 }, svg).textContent = opts.xLabel(0);
+      el('text', { x: ml + pw, y: H - 4, fill: ink.muted, 'font-size': 10, 'text-anchor': 'end' }, svg).textContent = opts.xLabel(n - 1);
+    }
+    for (const s of series) {
+      let d = '';
+      s.values.forEach((v, i) => { d += (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); });
+      if (opts.area) el('path', { d: d + `L${X(n - 1).toFixed(1)} ${Y(0)}L${X(0)} ${Y(0)}Z`, fill: s.color, opacity: 0.1 }, svg);
+      el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    }
+    const labels = series.map(s => ({ y: Y(s.values[n - 1]), v: s.values[n - 1] })).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 12) labels[i].y = labels[i - 1].y + 12;
+    for (const L of labels) {
+      const yEnd = Y(L.v);
+      if (Math.abs(L.y - yEnd) > 1) el('line', { x1: X(n - 1) + 5, y1: yEnd, x2: ml + pw + 7, y2: L.y, stroke: ink.axis, 'stroke-width': 1 }, svg);
+      el('text', { x: ml + pw + 9, y: L.y + 3.5, fill: ink.secondary, 'font-size': 11, class: 'tn' }, svg).textContent = fmt(L.v);
+    }
+    for (const s of series) el('circle', { cx: X(n - 1), cy: Y(s.values[n - 1]), r: 4, fill: s.color, stroke: ink.surface, 'stroke-width': 2 }, svg);
+    const cross = el('line', { x1: 0, x2: 0, y1: mt, y2: mt + ph, stroke: ink.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
+    const dots = series.map(s => el('circle', { r: 4, fill: s.color, stroke: ink.surface, 'stroke-width': 2, visibility: 'hidden' }, svg));
+    Object.assign(inst, { ml, pw, n });
+    inst.setIndex = (j) => {
+      if (j < 0) { cross.setAttribute('visibility', 'hidden'); dots.forEach(d => d.setAttribute('visibility', 'hidden')); tt.style.display = 'none'; return; }
+      const x = X(j);
+      cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible');
+      series.forEach((s, k) => { dots[k].setAttribute('cx', x); dots[k].setAttribute('cy', Y(s.values[j])); dots[k].setAttribute('visibility', 'visible'); });
+      tt.innerHTML = '';
+      const xl = document.createElement('div'); xl.className = 'x'; xl.textContent = opts.xLabel ? opts.xLabel(j) : String(j); tt.appendChild(xl);
+      for (const s of series) {
+        const r = document.createElement('div'); r.className = 'r';
+        const b = document.createElement('b'); b.textContent = fmt(s.values[j]);
+        const sp = document.createElement('span'); const key = document.createElement('i'); key.style.background = s.color;
+        sp.appendChild(key); sp.appendChild(document.createTextNode(s.name));
+        r.appendChild(b); r.appendChild(sp); tt.appendChild(r);
+      }
+      tt.style.display = 'block';
+      let left = x + 10; if (left + tt.offsetWidth > W - 4) left = x - tt.offsetWidth - 10;
+      tt.style.left = left + 'px'; tt.style.top = mt + 'px';
+    };
+    if (inst.idx >= 0) inst.setIndex(Math.min(inst.idx, n - 1));
+    if (opts.legendEl) {
+      const L = opts.legendEl; L.innerHTML = '';
+      if (series.length >= 2) for (const s of series) {
+        const sp = document.createElement('span'); const b = document.createElement('b'); b.style.background = s.color;
+        sp.appendChild(b); sp.appendChild(document.createTextNode(s.name)); L.appendChild(sp);
+      }
+    }
+  }
+  function renderTable(table, series, xLabel, rows, fmt) {
+    fmt = fmt || compact;
+    const n = series[0].values.length; table.innerHTML = '';
+    const thead = document.createElement('thead'), tr = document.createElement('tr');
+    const th0 = document.createElement('th'); th0.textContent = 'time'; tr.appendChild(th0);
+    for (const s of series) { const th = document.createElement('th'); th.textContent = s.name; tr.appendChild(th); }
+    thead.appendChild(tr); table.appendChild(thead);
+    const tb = document.createElement('tbody');
+    for (let i = n - 1; i >= Math.max(0, n - rows); i--) {
+      const r = document.createElement('tr'); const td0 = document.createElement('td'); td0.textContent = xLabel(i); r.appendChild(td0);
+      for (const s of series) { const td = document.createElement('td'); td.textContent = fmt(s.values[i]); r.appendChild(td); }
+      tb.appendChild(r);
+    }
+    table.appendChild(tb);
+  }
+  function divColor(v, dark) {
+    const t = Math.min(1, Math.abs(v) / 1.5);
+    const mid = dark ? [56, 56, 53] : [240, 239, 236];
+    const pole = v < 0 ? (dark ? [57, 135, 229] : [42, 120, 214]) : (dark ? [230, 103, 103] : [227, 73, 72]);
+    return 'rgb(' + mid.map((m, i) => Math.round(m + (pole[i] - m) * t)).join(',') + ')';
+  }
+  function synthSeries(n, fn) { const out = new Array(n); for (let i = 0; i < n; i++) out[i] = Math.max(0, fn(i)); return out; }
+  function scaleToEnd(arr, end) { const last = arr[arr.length - 1] || 1; const k = end / last; return arr.map(v => Math.max(0, v * k)); }
+
+  global.Mock = { rand, gauss, clamp, fmtInt, compact, degOf, mean, createWorld, step, spawnAgent, makeRenderer, lineChart, renderTable, divColor, synthSeries, scaleToEnd };
+})(window);
+
+</script>
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const S = { bg:'#0d0d0d', grid:'rgba(255,255,255,.035)', gridN:32, plant:'#199e70', herb:'#3987e5', pred:'#d95926', sel:'#ffffff', wedge:'rgba(255,255,255,.07)', wedgeLine:'rgba(255,255,255,.35)', sprite:'tri', plantR:1.4, pad:12 };
+const INK = { primary:'#fff', secondary:'#c3c2b7', muted:'#898781', grid:'#2c2c2a', axis:'#383835', surface:'#1a1a19' };
+const world = Mock.createWorld({ plants:1200, herb:380, pred:34 });
+const R = Mock.makeRenderer($('world'), S);
+const N = 150, STRIDE = 12;
+const fovH = () => Mock.degOf(Mock.mean(world.herb, a => a.fov)), fovP = () => Mock.degOf(Mock.mean(world.pred, a => a.fov));
+const hist = {
+  herb:   Mock.scaleToEnd(Mock.synthSeries(N, i => 380 + 130*Math.sin(i/22) + Mock.gauss()*8), world.herb.length),
+  pred:   Mock.scaleToEnd(Mock.synthSeries(N, i => 34 + 13*Math.sin(i/22 - 1.3) + Mock.gauss()*1.2), world.pred.length),
+  plants: Mock.scaleToEnd(Mock.synthSeries(N, i => 1150 - 260*Math.sin(i/22 + 0.9) + Mock.gauss()*20), world.plants.length),
+  fovH:   Mock.scaleToEnd(Mock.synthSeries(N, i => 150 + 50*(1-Math.exp(-i/90)) + Mock.gauss()*2.5), fovH()),
+  fovP:   Mock.scaleToEnd(Mock.synthSeries(N, i => 92 - 26*(1-Math.exp(-i/110)) + Mock.gauss()*1.5), fovP()),
+};
+const xLabel = i => i === N-1 ? 'now' : '−' + Mock.fmtInt((N-1-i)*STRIDE);
+function push(){ for (const k in hist) hist[k].shift(); hist.herb.push(world.herb.length); hist.pred.push(world.pred.length); hist.plants.push(world.plants.length); hist.fovH.push(fovH()); hist.fovP.push(fovP()); }
+function renderCharts(){
+  const mini = { ink:INK, group:'pop', height:64, xAxis:false, ml:38, mr:46, xLabel };
+  Mock.lineChart($('c-herb'),   Object.assign({}, mini, { series:[{ name:'herbivores', color:S.herb,  values:hist.herb }] }));
+  Mock.lineChart($('c-pred'),   Object.assign({}, mini, { series:[{ name:'predators',  color:S.pred,  values:hist.pred }] }));
+  Mock.lineChart($('c-plants'), Object.assign({}, mini, { height:78, xAxis:true, series:[{ name:'plants', color:S.plant, values:hist.plants }] }));
+  Mock.lineChart($('c-fov'), { ink:INK, height:110, ml:38, mr:46, xLabel, yFormat:v => Math.round(v) + '°', legendEl:$('lg-fov'),
+    series:[{ name:'herbivores', color:S.herb, values:hist.fovH }, { name:'predators', color:S.pred, values:hist.fovP }] });
+}
+let brainFor = null;
+function updateInspector(){
+  const a = world.selected; if (!a) return;
+  $('i-swatch').style.background = a.kind === 'pred' ? S.pred : S.herb;
+  $('i-name').textContent = (a.kind === 'pred' ? 'hawk' : 'sparrow') + ' #' + a.id;
+  $('i-e').textContent = a.energy.toFixed(2); $('i-age').textContent = Mock.fmtInt(a.age); $('i-gen').textContent = a.gen; $('i-kids').textContent = a.children;
+  $('i-fov').textContent = Mock.degOf(a.fov) + '°'; $('i-rng').textContent = a.range.toFixed(3); $('i-spd').textContent = a.spd.toFixed(4);
+  if (brainFor !== a) { brainFor = a; const b = $('brain'); b.innerHTML = ''; for (const g of a.genome) { const d = document.createElement('div'); d.style.background = Mock.divColor(g, true); b.appendChild(d); } }
+}
+
+// ---- console log ----
+const log = $('log');
+function line(html, cls){ const d = document.createElement('div'); if (cls) d.className = cls; d.innerHTML = html; log.appendChild(d); while (log.children.length > 300) log.removeChild(log.firstChild); log.scrollTop = log.scrollHeight; }
+const T = () => `<span class="t">t=${Mock.fmtInt(world.tick).padStart(7)}</span>  `;
+const sw = c => `<i style="background:${c}"></i>`;
+line(`<span class="k">rustywings 0.4.0</span> · sim on worker · SharedArrayBuffer · wasm 118 KB · seed <span class="k">0x7f3a2c11</span>`);
+line(`${T()}world 64×64 cells · 1,200 plants · 380 herbivores · 34 predators`);
+line(`<span class="cmd">snapshot load 3</span>`);
+line(`${T()}restored snapshot #3 (t=46,800) in 4 ms · checksum a91f…`);
+let lastB = 0, lastD = 0, predHigh = 0, sec = 0;
+function updateSlow(){
+  sec++;
+  const b = world.births - lastB, d = world.deaths - lastD; lastB = world.births; lastD = world.deaths;
+  if (sec % 5 === 0) line(`${T()}${sw(S.herb)}herb <span class="k">${Mock.fmtInt(world.herb.length)}</span>  ${sw(S.pred)}pred <span class="k">${Mock.fmtInt(world.pred.length)}</span>  ${sw(S.plant)}plant <span class="k">${Mock.fmtInt(world.plants.length)}</span>  births +${b} deaths −${d}`);
+  if (world.pred.length > predHigh) { predHigh = world.pred.length; if (sec > 3) line(`${T()}${sw(S.pred)}predators at run high: <span class="k">${predHigh}</span>`); }
+  const drop = hist.herb[N-1-10] - world.herb.length;
+  if (drop > hist.herb[N-1-10] * 0.15 && sec % 5 === 1) line(`${T()}<span class="w">⚠ herbivore crash</span> ${Mock.fmtInt(hist.herb[N-1-10])} → ${Mock.fmtInt(world.herb.length)} over 120 ticks`);
+  if (sec % 7 === 3 && world.selected) line(`${T()}${sw(world.selected.kind==='pred'?S.pred:S.herb)}#${world.selected.id} fov ${Mock.degOf(world.selected.fov)}° · energy ${world.selected.energy.toFixed(2)} · gen ${world.selected.gen}`);
+}
+// ---- commands ----
+const CMDS = [
+  { c:'reset --seed 0x7f3a2c11', d:'Restart with the current seed' },
+  { c:'set mutation.sigma 0.08', d:'Gaussian mutation std-dev (now 0.05)' },
+  { c:'set mutation.rate 0.02', d:'Per-gene mutation probability' },
+  { c:'set plants.regrowth 1.2', d:'Logistic regrowth rate' },
+  { c:'set herb.metabolism 1.1', d:'Energy burn multiplier' },
+  { c:'speed 16x', d:'Steps per frame' },
+  { c:'snapshot save', d:'Serialize world to a snapshot slot' },
+  { c:'snapshot load 3', d:'Restore slot 3' },
+  { c:'export genome #4821', d:'Download selected genome as JSON' },
+  { c:'toggle vision', d:'Draw FOV wedges for all agents' },
+  { c:'toggle grid', d:'Show spatial hash cells' },
+  { c:'follow #4821', d:'Camera follows the selected agent' },
+  { c:'share', d:'Copy URL with seed, config and tick' },
+  { c:'bench 10000', d:'Run 10k ticks headless, report ups' },
+];
+function runCmd(s){
+  line(`<span class="cmd">${s.replace(/</g,'&lt;')}</span>`);
+  const [k, ...rest] = s.trim().split(/\s+/);
+  if (k === 'speed') { const n = parseInt(rest[0]) || 1; speed = [1,4,16,64].includes(n) ? n : 1; $('spd').textContent = speed + '×'; line(`${T()}speed = ${speed}×`); }
+  else if (k === 'set') line(`${T()}ok · ${rest[0]} = <span class="k">${rest[1]}</span>`);
+  else if (k === 'toggle' && rest[0] === 'grid') { S.grid = S.grid ? null : 'rgba(255,255,255,.035)'; line(`${T()}grid ${S.grid ? 'on' : 'off'}`); }
+  else if (k === 'snapshot') line(`${T()}${rest[0] === 'save' ? 'saved snapshot #4 (t=' + Mock.fmtInt(world.tick) + ') · 41 KB' : 'restored snapshot #' + (rest[1] || 1)}`);
+  else if (k === 'share') line(`${T()}copied · https://rustywings.dev/?seed=0x7f3a2c11&t=${world.tick}&cfg=eJx…`);
+  else if (k === 'bench') line(`${T()}10,000 ticks · 1,412 agents avg · <span class="k">18,930 ups</span> · 0.53 ms/tick`);
+  else if (k === 'export') line(`${T()}genome-${rest[0] ? rest[0].replace('#','') : world.selected.id}.json · 54 weights · 1.2 KB`);
+  else if (k === 'reset') line(`${T()}reset · seed 0x7f3a2c11`);
+  else if (k) line(`${T()}<span class="w">unknown command</span> "${k}" · try ⌘K`);
+}
+const cmd = $('cmd'), ghost = $('ghost');
+cmd.oninput = () => { const v = cmd.value; const m = v ? CMDS.find(x => x.c.startsWith(v)) : null; ghost.textContent = m ? v + m.c.slice(v.length) : ''; };
+cmd.onkeydown = e => { if (e.key === 'Tab') { e.preventDefault(); const m = CMDS.find(x => x.c.startsWith(cmd.value)); if (m) { cmd.value = m.c; ghost.textContent = ''; } } else if (e.key === 'Enter') { runCmd(cmd.value); cmd.value = ''; ghost.textContent = ''; } };
+// ---- palette ----
+const overlay = $('overlay'), palin = $('palin'), pallist = $('pallist'); let palSel = 0;
+function renderPal(){ const q = palin.value.toLowerCase(); const items = CMDS.filter(x => (x.c + ' ' + x.d).toLowerCase().includes(q)); pallist.innerHTML = ''; items.forEach((x, i) => { const li = document.createElement('li'); if (i === palSel) li.className = 'sel'; const c = document.createElement('span'); c.className = 'c'; c.textContent = x.c; const d = document.createElement('span'); d.className = 'd'; d.textContent = x.d; li.appendChild(c); li.appendChild(d); li.onclick = () => { runCmd(x.c); overlay.style.display = 'none'; }; pallist.appendChild(li); }); }
+palin.oninput = () => { palSel = 0; renderPal(); };
+palin.onkeydown = e => { const n = pallist.children.length; if (e.key === 'ArrowDown') { palSel = (palSel + 1) % n; renderPal(); } else if (e.key === 'ArrowUp') { palSel = (palSel - 1 + n) % n; renderPal(); } else if (e.key === 'Enter') { const li = pallist.children[palSel]; if (li) li.click(); } else if (e.key === 'Escape') overlay.style.display = 'none'; };
+overlay.onclick = e => { if (e.target === overlay) overlay.style.display = 'none'; };
+$('palbtn').onclick = () => { overlay.style.display = 'flex'; palin.focus(); palin.select(); };
+renderPal(); palin.focus();
+
+let speed = 1, playing = true, frames = 0, stepsAcc = 0, sinceHist = 0, lastSec = performance.now(), lastChart = 0;
+function setPlaying(p){ playing = p; $('play').textContent = p ? '⏸ pause' : '▶ play'; $('play').classList.toggle('on', p); }
+$('play').onclick = () => setPlaying(!playing);
+$('stepbtn').onclick = () => { setPlaying(false); Mock.step(world); sinceHist++; };
+$('world').addEventListener('click', e => { const a = R.pick(e.clientX, e.clientY, world); if (a) { world.selected = a; line(`${T()}selected ${a.kind==='pred'?'hawk':'sparrow'} #${a.id}`); } });
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('palbtn').click(); } return; }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('palbtn').click(); }
+  else if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  else if (e.key === '.') { setPlaying(false); Mock.step(world); sinceHist++; }
+  else if (e.key === '/') { e.preventDefault(); cmd.focus(); }
+});
+function frame(now){
+  if (playing) { for (let i = 0; i < speed; i++) Mock.step(world); stepsAcc += speed; sinceHist += speed; }
+  while (sinceHist >= STRIDE) { push(); sinceHist -= STRIDE; }
+  R.draw(world, world.tick);
+  $('tick').textContent = Mock.fmtInt(world.tick);
+  $('h-herb').textContent = $('k-herb').textContent = Mock.fmtInt(world.herb.length);
+  $('h-pred').textContent = $('k-pred').textContent = Mock.fmtInt(world.pred.length);
+  $('h-plant').textContent = $('k-plant').textContent = Mock.fmtInt(world.plants.length);
+  $('na').textContent = Mock.fmtInt(world.herb.length + world.pred.length);
+  if (now - lastChart > 160) { renderCharts(); updateInspector(); lastChart = now; }
+  frames++;
+  if (now - lastSec >= 1000) { $('fps').textContent = frames; $('ups').textContent = Mock.fmtInt(stepsAcc); frames = 0; stepsAcc = 0; lastSec = now; updateSlow(); }
+  requestAnimationFrame(frame);
+}
+renderCharts(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
