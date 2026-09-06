@@ -1,0 +1,29 @@
+[package]
+name = "rustywings-wasm"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "wasm-bindgen facade over rustywings-core for the browser frontend."
+license = "MIT"
+repository = "https://github.com/mahim37/rustyWings"
+publish = false
+
+[lib]
+# cdylib for the browser; rlib so the pure parts (frame packing) run under
+# `cargo test` natively, where the test suite is fast and debuggable.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rustywings-core = { path = "../rustywings-core" }
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+serde_json = "1"
+wasm-bindgen = "0.2"
+
+[package.metadata.wasm-pack.profile.release]
+# -O3 for speed; the sim loop is the hot path, size is secondary (~150 KB).
+wasm-opt = ["-O3"]
