@@ -5,10 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>rustyWings · a tiny evolving world</title>
 <meta name="description" content="An open-ended ecosystem of neural-network birds. Sparrows eat seeds, hawks eat sparrows, and every brain is inherited, mutated and kept only if it worked. Rust, WebAssembly, WebGL2.">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta property="og:title" content="rustyWings · a tiny evolving world">
 <meta property="og:description" content="Sparrows eat seeds. Hawks eat sparrows. Nobody is programmed to do anything.">
+<script>
+  // Apply the stored theme before the first paint so a dark page never flashes light.
+  (function () {
+    var t = localStorage.getItem('rustywings.theme');
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 </head>
 <body>
 <header class="top">
@@ -73,8 +81,8 @@
     <div class="legend" id="lg-fov"></div>
     <div class="chart" id="c-fov"></div>
     <div class="eyes">
-      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-h" d="" fill="#2a78d6" opacity=".18"/><circle r="4" fill="#2a78d6"/></svg><span>Sparrows see <b id="e-h">—</b> around them</span></div>
-      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-p" d="" fill="#eb6834" opacity=".18"/><circle r="4" fill="#eb6834"/></svg><span>Hawks focus <b id="e-p">—</b> ahead</span></div>
+      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-h" d="" fill="var(--herb)" opacity=".18"/><circle r="4" fill="var(--herb)"/></svg><span>Sparrows see <b id="e-h">—</b> around them</span></div>
+      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-p" d="" fill="var(--pred)" opacity=".18"/><circle r="4" fill="var(--pred)"/></svg><span>Hawks focus <b id="e-p">—</b> ahead</span></div>
     </div>
     <p class="explain">Eyes cost energy every tick, so nobody gets wide eyes for free. Sparrows still tend to earn them; hawks tend to narrow theirs.</p>
   </section>
@@ -130,6 +138,7 @@
     <div class="toggle"><span>Show every bird's vision <kbd>V</kbd></span><span class="sw" data-t="vision" role="switch" aria-checked="false"></span></div>
     <div class="toggle"><span>Show the selected bird's trail <kbd>T</kbd></span><span class="sw on" data-t="trail" role="switch" aria-checked="true"></span></div>
     <div class="toggle"><span>Show seed patches</span><span class="sw on" data-t="patches" role="switch" aria-checked="true"></span></div>
+    <div class="toggle"><span>Theme</span><span class="seg mini" id="theme" role="group" aria-label="theme"></span></div>
   </section>
 </aside>
 

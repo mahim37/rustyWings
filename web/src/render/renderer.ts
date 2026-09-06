@@ -238,10 +238,6 @@ out vec4 o;
 void main() { o = u_color; }`;
 
 const WEDGE_SEGMENTS = 28;
-/** The ground. */
-const FIELD = '#f7f8f1';
-/** Selection ring, trail and outlines. */
-const INK = '#0b0b0b';
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
   const s = gl.createShader(type);
@@ -290,6 +286,14 @@ export interface RenderOptions {
   patchRadius: number;
 }
 
+/** Colours that change with the page theme. */
+export interface Theme {
+  /** The ground, `#rrggbb`. */
+  field: string;
+  /** Selection ring, trail and outlines, `#rrggbb`. */
+  ink: string;
+}
+
 /** Selected bird's row, copied out of the frame so it survives recycling. */
 export interface SelectedRow {
   x: number;
@@ -329,6 +333,8 @@ export class Renderer {
   private trailCount = 0;
   private selectedIndex = -1;
   selected: SelectedRow | null = null;
+  private field: Rgba = rgba('#f7f8f1', 1);
+  private ink = '#0b0b0b';
   private readonly lineScratch = new Float32Array((WEDGE_SEGMENTS + 2) * 2);
   private readonly start = performance.now();
 
@@ -475,6 +481,11 @@ export class Renderer {
     this.gl.viewport(0, 0, px, px);
   }
 
+  setTheme(theme: Theme): void {
+    this.field = rgba(theme.field, 1);
+    this.ink = theme.ink;
+  }
+
   /** Upload a packed frame. The buffer may be recycled as soon as this returns. */
   upload(frame: Float32Array): void {
     const gl = this.gl;
@@ -536,8 +547,7 @@ export class Renderer {
     const gl = this.gl;
     const dpr = this.dpr;
     const zoomScale = Math.pow(this.camera.zoom, 0.55);
-    const field = rgba(FIELD, 1);
-    gl.clearColor(field[0], field[1], field[2], 1);
+    gl.clearColor(this.field[0], this.field[1], this.field[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     if (opts.showPatches && this.patchCount > 0) {
@@ -563,7 +573,7 @@ export class Renderer {
       // The selected bird's own wedge, darker, then its outline.
       this.common(this.wedgeOne);
       this.agentAttribs(this.selectedIndex);
-      const ink = rgba(INK, 0.07);
+      const ink = rgba(this.ink, 0.07);
       gl.uniform4f(this.wedgeOne.u['u_colorHerb']!, ...ink);
       gl.uniform4f(this.wedgeOne.u['u_colorPred']!, ...ink);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, WEDGE_SEGMENTS * 3, 1);
@@ -582,7 +592,7 @@ export class Renderer {
       this.common(this.trail);
       gl.uniform1f(this.trail.u['u_px']!, 3.2 * dpr * zoomScale);
       gl.uniform1f(this.trail.u['u_count']!, this.trailCount);
-      gl.uniform4f(this.trail.u['u_color']!, ...rgba(INK, 0.55));
+      gl.uniform4f(this.trail.u['u_color']!, ...rgba(this.ink, 0.55));
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.trailCount);
     }
     if (this.agentCount > 0) {
@@ -599,7 +609,7 @@ export class Renderer {
       const radius = (sel.species > 0.5 ? 20 : 15) * sel.size * zoomScale + 8;
       gl.uniform1f(this.ring.u['u_px']!, radius * 2 * dpr);
       gl.uniform1f(this.ring.u['u_width']!, 1.6 / radius);
-      gl.uniform4f(this.ring.u['u_color']!, ...rgba(INK, 1));
+      gl.uniform4f(this.ring.u['u_color']!, ...rgba(this.ink, 1));
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, 1);
     }
   }
@@ -620,7 +630,7 @@ export class Renderer {
     gl.bufferData(gl.ARRAY_BUFFER, pts, gl.DYNAMIC_DRAW);
     this.common(this.outline);
     gl.uniform2f(this.outline.u['u_anchor']!, sel.x, sel.y);
-    gl.uniform4f(this.outline.u['u_color']!, ...rgba(INK, 0.3));
+    gl.uniform4f(this.outline.u['u_color']!, ...rgba(this.ink, 0.3));
     gl.drawArrays(gl.LINE_LOOP, 0, WEDGE_SEGMENTS + 2);
   }
 

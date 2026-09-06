@@ -1,6 +1,6 @@
 /**
  * Wires the page together: worker client, renderer, charts, inspector,
- * settings, files, URL state and input. No framework; the DOM is the
+ * settings, files, theme, URL state and input. No framework; the DOM is the
  * state for things the DOM already knows, and this class holds the rest.
  */
 
@@ -14,6 +14,7 @@ import { History, toSample } from './ui/history';
 import { describe, Inspector } from './ui/inspector';
 import { updateKpis } from './ui/kpis';
 import { Settings } from './ui/settings';
+import { applyTheme, cssColor, readTheme, THEME_KEY, THEMES } from './ui/theme';
 import { toast } from './ui/toast';
 import { applyPatch, buildUrl, parseUrl, randomSeed } from './url';
 
@@ -28,9 +29,6 @@ const POINTS = 160;
 const METEOR_RADIUS = 0.06;
 const SCATTER_SEEDS = 400;
 const PICK_RADIUS_PX = 14;
-
-const INK: Ink = { primary: '#0b0b0b', secondary: '#52514e', muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7', surface: '#fcfcfb' };
-const COLOR = { herb: '#2a78d6', pred: '#eb6834', plant: '#1baf7a' };
 /** Extension of a saved world; the CLI's `--resume` reads the same bytes. */
 const WORLD_EXT = '.world';
 
@@ -73,7 +71,10 @@ export class App {
   private lastSecond = performance.now();
   private lastChartAt = 0;
   private chartsDirty = true;
+  private ink: Ink = { primary: '#0b0b0b', secondary: '#52514e', muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7', surface: '#fcfcfb' };
+  private color = { herb: '#2a78d6', pred: '#eb6834', plant: '#1baf7a' };
   private readonly canvas = $<HTMLCanvasElement>('world');
+  private readonly darkMedia = matchMedia('(prefers-color-scheme: dark)');
 
   constructor() {
     this.renderer = new Renderer(this.canvas);
@@ -85,6 +86,7 @@ export class App {
     this.bindStage();
     this.bindControls();
     this.bindFiles();
+    this.bindTheme();
     this.bindKeys();
   }
 
@@ -326,8 +328,8 @@ export class App {
     const plants = this.history.window('plants', w, POINTS).values;
     const fovH = this.history.window('fovH', w, POINTS).values;
     const fovP = this.history.window('fovP', w, POINTS).values;
-    const ink = INK;
-    const color = COLOR;
+    const ink = this.ink;
+    const color = this.color;
     const mini = { ink, group: 'pop', height: 68, xAxis: false, ml: 40, xLabel, area: true };
     lineChart($('c-herb'), { ...mini, series: [{ name: 'Sparrows', color: color.herb, values: herb }] });
     lineChart($('c-pred'), { ...mini, series: [{ name: 'Hawks', color: color.pred, values: pred }] });
@@ -575,6 +577,46 @@ export class App {
       return;
     }
     toast(`Drop a ${WORLD_EXT} file to open a world, or a saved genome .json to release a bird`, 4000);
+  }
+
+  // ----- theme ----------------------------------------------------------
+
+  private bindTheme(): void {
+    const box = $('theme');
+    box.innerHTML = '';
+    for (const t of THEMES) {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = t.label;
+      b.dataset['choice'] = t.choice;
+      b.addEventListener('click', () => {
+        localStorage.setItem(THEME_KEY, t.choice);
+        this.syncTheme();
+      });
+      box.appendChild(b);
+    }
+    this.darkMedia.addEventListener('change', () => this.syncTheme());
+    this.syncTheme();
+  }
+
+  /** Apply the stored theme choice and re-read every colour the canvas and charts use. */
+  private syncTheme(): void {
+    const choice = readTheme();
+    $('theme')
+      .querySelectorAll<HTMLElement>('.btn')
+      .forEach((b) => b.classList.toggle('on', b.dataset['choice'] === choice));
+    applyTheme(choice, this.darkMedia.matches);
+    this.ink = {
+      primary: cssColor('--ink'),
+      secondary: cssColor('--ink-2'),
+      muted: cssColor('--ink-3'),
+      grid: cssColor('--grid'),
+      axis: cssColor('--axis'),
+      surface: cssColor('--surface'),
+    };
+    this.color = { herb: cssColor('--herb'), pred: cssColor('--pred'), plant: cssColor('--plant') };
+    this.renderer.setTheme({ field: cssColor('--field'), ink: cssColor('--ink') });
+    this.chartsDirty = true;
   }
 
   private applyConfig(c: Config): void {
