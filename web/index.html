@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rustyWings · a tiny evolving world</title>
+<meta name="description" content="An open-ended ecosystem of neural-network birds. Sparrows eat seeds, hawks eat sparrows, and every brain is inherited, mutated and kept only if it worked. Rust, WebAssembly, WebGL2.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:title" content="rustyWings · a tiny evolving world">
+<meta property="og:description" content="Sparrows eat seeds. Hawks eat sparrows. Nobody is programmed to do anything.">
+</head>
+<body>
+<header class="top">
+  <div class="wordmark">rustyWings<span>a tiny evolving world</span></div>
+  <button class="seed" id="seed" title="Click to type a seed. Every run with the same seed and settings replays identically."><span id="seed-text">seed …</span></button>
+  <button class="btn icon" id="dice" title="New world with a random seed">🎲</button>
+  <div class="tick">tick <span id="tick" class="tn">0</span></div>
+  <div class="transport">
+    <button class="btn" id="rewind" title="Rewind to the last snapshot (or tick 0)">⏮</button>
+    <button class="btn on" id="play" title="Pause / play (Space)">⏸</button>
+    <button class="btn" id="stepbtn" title="Step one tick (.)">⏭</button>
+    <div class="seg" id="speed" role="group" aria-label="speed"></div>
+    <button class="btn" id="snapshot" title="Save a snapshot of this moment">Snapshot</button>
+    <button class="btn" id="seeds" title="Scatter 400 seeds (S)">Scatter seeds</button>
+    <button class="btn" id="meteor" title="Drop a meteor where you click next (M)">Meteor</button>
+    <button class="btn" id="share" title="Copy a link that replays this world">Share this world</button>
+    <button class="btn icon" id="help-btn" title="Help (?)">?</button>
+  </div>
+</header>
+
+<main class="stage" id="stage">
+  <canvas id="world" aria-label="the world: seeds, sparrows and hawks on a torus"></canvas>
+  <div class="hud">
+    <span class="chip"><i style="background:var(--plant)"></i>Seeds <b id="h-plant" class="tn">0</b></span>
+    <span class="chip"><i style="background:var(--herb)"></i>Sparrows <b id="h-herb" class="tn">0</b></span>
+    <span class="chip"><i style="background:var(--pred)"></i>Hawks <b id="h-pred" class="tn">0</b></span>
+  </div>
+  <div class="callout" id="callout" style="display:none"></div>
+  <div class="welcome" id="welcome"><button class="x" id="wx" aria-label="dismiss">✕</button><b>Sparrows eat seeds. Hawks eat sparrows.</b> Nobody is programmed to do anything. Every bird's brain is inherited, mutated, and kept only if it worked. Click any bird to meet it.</div>
+  <div class="hint">click a bird · drag to pan · wheel to zoom · double-click to reset</div>
+  <div class="stage-error" id="stage-error" style="display:none" role="alert"></div>
+</main>
+
+<aside class="rail">
+  <section>
+    <h2>Right now</h2>
+    <div class="kpis">
+      <div class="tile"><div class="l"><i style="background:var(--herb)"></i>Sparrows</div><div class="v tn" id="k-herb-v">0</div><div class="d tn" id="k-herb-d"></div></div>
+      <div class="tile"><div class="l"><i style="background:var(--pred)"></i>Hawks</div><div class="v tn" id="k-pred-v">0</div><div class="d tn" id="k-pred-d"></div></div>
+      <div class="tile"><div class="l"><i style="background:var(--plant)"></i>Seeds</div><div class="v tn" id="k-plant-v">0</div><div class="d tn" id="k-plant-d"></div></div>
+      <div class="tile"><div class="l">Chicks per 1k ticks</div><div class="v tn" id="k-birth-v">—</div><div class="d tn" id="k-birth-d"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Who's winning? <span>populations</span><span class="seg mini" id="window" role="group" aria-label="chart window"></span><span class="tablelink" id="tvlink" role="button" tabindex="0">table</span></h2>
+    <div class="cap"><i style="background:var(--herb)"></i>Sparrows</div><div class="chart" id="c-herb"></div>
+    <div class="cap"><i style="background:var(--pred)"></i>Hawks</div><div class="chart" id="c-pred"></div>
+    <div class="cap"><i style="background:var(--plant)"></i>Seeds</div><div class="chart" id="c-plants"></div>
+    <table class="tv tn" id="tv" style="display:none"></table>
+    <p class="explain">When sparrows boom, hawks follow. When hawks boom, sparrows crash. Nobody coded that in.</p>
+  </section>
+
+  <section>
+    <h2>How eyes evolved <span>average field of view</span></h2>
+    <div class="legend" id="lg-fov"></div>
+    <div class="chart" id="c-fov"></div>
+    <div class="eyes">
+      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-h" d="" fill="#2a78d6" opacity=".18"/><circle r="4" fill="#2a78d6"/></svg><span>Sparrows see <b id="e-h">—</b> around them</span></div>
+      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-p" d="" fill="#eb6834" opacity=".18"/><circle r="4" fill="#eb6834"/></svg><span>Hawks focus <b id="e-p">—</b> ahead</span></div>
+    </div>
+    <p class="explain">Eyes cost energy every tick, so nobody gets wide eyes for free. Sparrows still tend to earn them; hawks tend to narrow theirs.</p>
+  </section>
+
+  <section class="insp" id="insp">
+    <h2>Meet a bird</h2>
+    <div id="insp-empty" class="empty">
+      <p>Click any bird on the map to see its energy, its body plan, what its eyes see right now and the brain it was born with.</p>
+      <button class="btn" id="pick">Pick one for me</button>
+    </div>
+    <div id="insp-body" style="display:none">
+      <div class="meet">
+        <div class="portrait"><canvas id="portrait" width="120" height="120"></canvas></div>
+        <div><div class="hd"><b id="i-name">—</b><span id="i-kind"></span></div><p id="i-story"></p></div>
+      </div>
+      <div class="row"><span>Energy</span><b id="i-e" class="tn">0.00</b></div>
+      <div class="meter"><div id="i-m" style="width:0%"></div></div>
+      <div class="facts tn">
+        <div><span>Age</span><b id="i-age">0</b></div>
+        <div><span>Chicks</span><b id="i-kids">0</b></div>
+        <div><span>Meals</span><b id="i-meals">0</b></div>
+        <div><span>Last meal</span><b id="i-meal">—</b></div>
+        <div><span>Speed now</span><b id="i-spd">0</b></div>
+      </div>
+      <div class="traits tn">
+        <div class="trait"><span>Field of view</span><div class="bar"><div id="t-fov-b"></div></div><output id="t-fov"></output></div>
+        <div class="trait"><span>Sight range</span><div class="bar"><div id="t-rng-b"></div></div><output id="t-rng"></output></div>
+        <div class="trait"><span>Top speed</span><div class="bar"><div id="t-spd-b"></div></div><output id="t-spd"></output></div>
+        <div class="trait"><span>Body size</span><div class="bar"><div id="t-size-b"></div></div><output id="t-size"></output></div>
+      </div>
+      <div class="sub">What it sees right now <span>left → right across its field of view</span></div>
+      <div class="retina" id="retina"></div>
+      <div class="sub">Its brain <span>inherited at birth, fixed for life</span></div>
+      <div class="brain-head" id="brain-head"></div>
+      <div class="brain" id="brain"></div>
+      <div class="brain-cap"><span id="brain-cap">brain weights</span><span>blue − · red +</span></div>
+      <div class="actions"><button class="btn" id="follow" title="Keep the camera on this bird (F)">Follow</button><button class="btn" id="save-genome" title="Download this bird's traits and brain weights as JSON">Save genome</button></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>World settings <span>apply live</span></h2>
+    <div class="ctl">
+      <label for="r-grow" title="Multiplies how many seeds sprout per tick in an empty world">Seed regrowth</label><output id="o-grow">1.00×</output><input type="range" id="r-grow" min="0.2" max="2.5" step="0.05" value="1">
+      <label for="r-mut" title="Chance that each brain weight mutates at birth">Mutation rate</label><output id="o-mut">0.050</output><input type="range" id="r-mut" min="0" max="0.3" step="0.005" value="0.05">
+      <label for="r-hm" title="Multiplies the energy sparrows burn just living and moving">Sparrow hunger</label><output id="o-hm">1.00×</output><input type="range" id="r-hm" min="0.5" max="2" step="0.05" value="1">
+      <label for="r-pm" title="Multiplies the energy hawks burn just living and moving">Hawk hunger</label><output id="o-pm">1.00×</output><input type="range" id="r-pm" min="0.5" max="2" step="0.05" value="1">
+    </div>
+    <div class="actions"><button class="btn" id="reset-settings">Reset</button><button class="btn" id="copy-config" title="Every parameter, as the JSON the command-line tool reads">Copy config</button></div>
+    <div class="toggle"><span>Show every bird's vision <kbd>V</kbd></span><span class="sw" data-t="vision" role="switch" aria-checked="false"></span></div>
+    <div class="toggle"><span>Show seed patches</span><span class="sw on" data-t="patches" role="switch" aria-checked="true"></span></div>
+  </section>
+</aside>
+
+<footer class="status">
+  <span>ups <b id="ups" class="tn">0</b></span><span>fps <b id="fps" class="tn">0</b></span><span>birds <b id="na" class="tn">0</b></span><span id="grid">grid</span><span id="wasm">wasm</span><span>worker</span><span title="Digest of all state. `rustywings verify --seed … --ticks …` prints the same value natively.">checksum <b id="sum" class="tn">—</b></span><span id="ver"></span>
+  <div class="keys"><span><kbd>Space</kbd> pause</span><span><kbd>.</kbd> step</span><span><kbd>[</kbd> <kbd>]</kbd> speed</span><span><kbd>F</kbd> follow</span><span><kbd>R</kbd> random bird</span><span><kbd>?</kbd> help</span></div>
+</footer>
+<div class="toast" id="toast" role="status"></div>
+
+<dialog id="help">
+  <div class="help">
+    <button class="x" id="help-close" aria-label="close">✕</button>
+    <h3>What you are looking at</h3>
+    <p>A square world that wraps at the edges. Seeds grow in drifting patches. Sparrows eat seeds; hawks eat sparrows. Every bird has an energy budget: moving, seeing and simply being alive all cost energy, a meal restores some, and a bird that runs dry dies. A bird with plenty of energy has a chick, which inherits its parent's body plan and brain with small mutations.</p>
+    <p>Nobody is told to chase or flee. A bird's retina feeds a tiny neural network that decides how hard to turn and accelerate. Brains that ate got to reproduce; brains that did not, did not. What you see is what survived.</p>
+    <h3>Keys</h3>
+    <div class="keys-table">
+      <span><kbd>Space</kbd></span><span>pause / play</span>
+      <span><kbd>.</kbd></span><span>step one tick</span>
+      <span><kbd>[</kbd> <kbd>]</kbd></span><span>slower / faster</span>
+      <span><kbd>F</kbd></span><span>follow the selected bird</span>
+      <span><kbd>R</kbd></span><span>select a random bird</span>
+      <span><kbd>V</kbd></span><span>show every bird's field of view</span>
+      <span><kbd>S</kbd></span><span>scatter seeds</span>
+      <span><kbd>M</kbd></span><span>arm a meteor, then click</span>
+      <span><kbd>0</kbd></span><span>reset the view</span>
+      <span><kbd>Esc</kbd></span><span>deselect / cancel</span>
+    </div>
+    <h3>Reproducible by design</h3>
+    <p>The seed in the header and the settings you choose define the world completely. The same link replays the same world, tick for tick, on any machine, and the checksum in the status bar matches what the native command-line build prints for the same seed and tick.</p>
+    <p class="credit">Built in Rust, compiled to WebAssembly, simulated on a Web Worker and drawn with WebGL2. Inspired by Patryk Wychowaniec's <em>Learning to Fly</em> series; the simulation, the ecosystem and this frontend are original work. <a href="https://github.com/mahim37/rustyWings" target="_blank" rel="noopener">Source on GitHub</a>.</p>
+  </div>
+</dialog>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
