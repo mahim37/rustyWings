@@ -1,74 +1,72 @@
 # rustyWings
-## Neural Network Bird Simulation
 
-----
-**Simulation of Evolution**
+**A tiny evolving world.** Sparrows eat seeds. Hawks eat sparrows. Nobody is
+programmed to do anything: every bird's brain is inherited, mutated, and kept
+only if it worked.
 
-Powered by Neural Networks and Genetic Algorithms, rustyWings simulates a world where triangular birds navigate their environment in search of food represented by circles.
+Live: **https://rusty-wings-iota.vercel.app**
 
-----
+rustyWings is an open-ended artificial-life simulation. Thousands of birds
+share a wrapping world with seeds that regrow in drifting patches. Each bird
+has an energy budget (moving, seeing and being alive all cost energy), a body
+plan it can pass on (field of view, sight range, top speed, size) and a small
+neural network that turns what its retina sees into steering. Birds with
+enough energy have chicks; birds that run out die. There are no generations
+and no fitness function. What you see is what survived.
 
-**About**
+The core is a Rust crate compiled both natively and to WebAssembly, and it is
+deterministic to the bit: a seed means the same world on Linux, macOS,
+Windows and in your browser. The checksum in the app's status bar is the same
+number the command-line tool prints for the same seed and tick.
 
-* Each bird has:
-    * An eye with a limited field of vision visualized as a circle around the bird.
-    * A neural network brain that determines its movement direction and speed.
-* The simulation starts with randomly initialized brains for each bird.
-* After 2500 turns (approximately 40 seconds), birds with the most food are selected for reproduction. Their offspring forms the next generation.
-* Over generations, the birds, through a genetic algorithm, become adept at finding food - it's like they're learning on their own!
-* **Note:** This is not the boids algorithm. Bird behavior is not pre-programmed, it's learned over time.
+## What is in the box
 
-----
+```
+crates/rustywings-core   the simulation: no I/O, no threads, no platform math
+crates/rustywings-cli    rustywings run | bench | verify | arena | config
+crates/rustywings-wasm   the browser facade
+web/                     Vite + TypeScript frontend: Web Worker, WebGL2, SVG charts
+```
 
-**Interaction**
+`libs/` and `www/` hold the original tutorial-derived app and are scheduled
+for removal.
 
-Influence the simulation by entering commands in the input box:
+## Run it
 
-* `train (t)`: Fast-forwards the simulation to observe rapid learning.
-* Explore the source code: [https://github.com/mahim37/rustyWings](https://github.com/mahim37/rustyWings)
+Rust stable with the `wasm32-unknown-unknown` target (pinned by
+`rust-toolchain.toml`), [wasm-pack](https://rustwasm.github.io/wasm-pack/),
+Node 22+ and pnpm.
 
-**Enjoy the simulation!**
+```bash
+# the browser app
+cd web && pnpm install && pnpm build:wasm && pnpm dev
 
-----
+# the same world, headless
+cargo build --release -p rustywings-cli
+./target/release/rustywings run --seed 1 --ticks 60000 --every 500 --out stats.csv
+./target/release/rustywings verify --seed 1 --ticks 2000      # prints the checksum the app shows
+./target/release/rustywings arena --seeds 3 --ticks 30000     # do evolved birds beat random ones?
+./target/release/rustywings bench --agents 5000 --ticks 200
+```
 
-**Commands**
+The "Copy config" button in the app produces the JSON that `rustywings run
+--config` reads, so a world tuned in the browser can be run for a million
+ticks on the command line.
 
-* `p / pause`: Pauses or resumes the simulation.
-* `r / reset [parameter=value ...]`: Restarts the simulation with optional parameters:
-    * `a / animals`: Number of birds (default: ${config.world_animals})
-    * `f / foods`: Number of food items (default: ${config.world_foods})
-    * `n / neurons`: Number of brain neurons per bird (default: ${config.brain_neurons})
-    * `p / photoreceptors`: Number of eye cells per bird (default: ${config.eye_cells})
-    * Examples:
-        * `reset animals=100 foods=100`
-        * `r a=100 f=100`
-        * `r p=3`
-* `(t)rain [generations]`: Fast-forwards one or more generations.
-    * Examples:
-        * `train`
-        * `t 5`
+## How it is checked
 
-----
+- `cargo test --workspace`: unit tests, a golden checksum for seed 1 at
+  tick 2,000 (run on three operating systems in CI), and an ecology test
+  that both species must survive 6,000 ticks without the rescue rule.
+- `rustywings arena`: a standardised foraging arena scores a genome. CI
+  fails if sparrows evolved for 30,000 ticks do not out-eat random ones.
+- `web`: vitest loads the built wasm in Node and asserts the same golden
+  checksum, then type-checks and builds the site.
 
-**Advanced Tips**
+## Credit
 
-* Modify any parameter within the `reset` command.
-    * Examples:
-        * `r i:integer_param=123 f:float_param=123`
-        * `r a=200 f=200 f:food_size=0.002`
-    * Parameter names can be found in the source code.
+The idea of evolving neural-network birds with a retina of angular cells
+comes from Patryk Wychowaniec's *Learning to Fly* series. The ecosystem,
+the deterministic core, the tooling and the frontend here are original work.
 
-----
-
-**Interesting Scenarios**
-
-* `r i:ga_reverse=1 f:sim_speed_min=0.003`: Birds avoid food (try to escape?)
-* `r i:brain_neurons=1`: Single-neuron "zombie" birds
-* `r f:food_size=0.05`: Larger food items
-* `r f:eye_fov_angle=0.45`: Birds with a narrow field of view
-
-----
-
-**Note:**
-
-* `${config.world_animals}`, `${config.world_foods}`, `${config.brain_neurons}`, and `${config.eye_cells}` represent default values defined in the code.
+MIT licensed, see [LICENSE.md](LICENSE.md).
