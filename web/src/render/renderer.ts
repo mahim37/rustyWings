@@ -1,7 +1,7 @@
 /**
  * WebGL2 renderer. One instanced draw call each for seed patches, seeds,
- * vision wedges, birds and the selection ring, all reading from the packed
- * frame buffer the worker sent.
+ * vision wedges, relatives' halos, the selected bird's trail, birds and the
+ * selection ring, all reading from the packed frame buffer the worker sent.
  */
 
 import { AGENT_STRIDE, FRAME_HEADER, POINT_STRIDE } from '../sim/protocol';
@@ -23,10 +23,13 @@ vec2 toClip(vec2 world) {
 vec2 pxToClip(vec2 px) { return px * 2.0 / u_res; }
 `;
 
-const SPRITE_VS = VERT_COMMON + `
+const SPRITE_VS =
+  VERT_COMMON +
+  `
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_inst0;   // x, y, heading, size
 layout(location = 2) in vec4 a_inst1;   // energy, species, fov, range
+layout(location = 3) in vec2 a_inst2;   // speed (fraction of top speed), kin
 uniform float u_time;
 uniform float u_dpr;
 uniform float u_spritePx;
@@ -39,10 +42,11 @@ void main() {
   mat2 rot = mat2(cos(h), sin(h), -sin(h), cos(h));
   vec2 offset = rot * (a_corner * px);
   gl_Position = vec4(toClip(a_inst0.xy) + pxToClip(offset), 0.0, 1.0);
-  // Wing beat: faster for sparrows, phase from the instance id.
+  // Wing beat: faster for sparrows, phase from the instance id. A bird that
+  // is not moving holds its wings level instead of flapping on the spot.
   float rate = mix(7.0, 4.5, hawk);
   float phase = float(gl_InstanceID) * 0.618;
-  float frame = floor(mod(u_time * rate + phase, 4.0));
+  float frame = a_inst2.x < 0.05 ? 0.0 : floor(mod(u_time * rate + phase, 4.0));
   v_uv = (a_corner + 0.5) * vec2(1.0 / 4.0, 0.5) + vec2(frame / 4.0, hawk * 0.5);
   v_alpha = 0.5 + 0.5 * clamp(a_inst1.x, 0.0, 1.0);
 }`;
@@ -55,7 +59,9 @@ in float v_alpha;
 out vec4 o;
 void main() { o = texture(u_atlas, v_uv) * v_alpha; }`;
 
-const DOT_VS = VERT_COMMON + `
+const DOT_VS =
+  VERT_COMMON +
+  `
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec2 a_pos;
 uniform float u_px;      // diameter in device px
@@ -76,7 +82,71 @@ void main() {
   o = u_color * a;
 }`;
 
-const PATCH_VS = VERT_COMMON + `
+// The trail: one dot per recorded tick, fading toward the oldest.
+const TRAIL_VS =
+  VERT_COMMON +
+  `
+layout(location = 0) in vec2 a_corner;
+layout(location = 1) in vec2 a_pos;
+uniform float u_px;
+uniform float u_count;
+out vec2 v_c;
+out float v_fade;
+void main() {
+  v_c = a_corner * 2.0;
+  v_fade = (float(gl_InstanceID) + 1.0) / u_count;
+  gl_Position = vec4(toClip(a_pos) + pxToClip(a_corner * u_px), 0.0, 1.0);
+}`;
+
+const TRAIL_FS = `#version 300 es
+precision mediump float;
+uniform vec4 u_color;
+in vec2 v_c;
+in float v_fade;
+out vec4 o;
+void main() {
+  float d = length(v_c);
+  float a = (1.0 - smoothstep(0.6, 1.0, d)) * v_fade * v_fade;
+  o = u_color * a;
+}`;
+
+// A soft disc behind every relative of the selected bird.
+const HALO_VS =
+  VERT_COMMON +
+  `
+layout(location = 0) in vec2 a_corner;
+layout(location = 1) in vec4 a_inst0;
+layout(location = 2) in vec4 a_inst1;
+layout(location = 3) in vec2 a_inst2;
+uniform float u_px;
+uniform float u_dpr;
+out vec2 v_c;
+out float v_species;
+void main() {
+  v_c = a_corner * 2.0;
+  v_species = a_inst1.y;
+  if (a_inst2.y < 0.5) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  float hawk = step(0.5, a_inst1.y);
+  float px = u_px * mix(1.0, 1.4, hawk) * a_inst0.w * u_dpr * pow(u_zoom, 0.55);
+  gl_Position = vec4(toClip(a_inst0.xy) + pxToClip(a_corner * px), 0.0, 1.0);
+}`;
+
+const HALO_FS = `#version 300 es
+precision mediump float;
+uniform vec4 u_colorHerb;
+uniform vec4 u_colorPred;
+in vec2 v_c;
+in float v_species;
+out vec4 o;
+void main() {
+  float d = length(v_c);
+  float a = 1.0 - smoothstep(0.55, 1.0, d);
+  o = mix(u_colorHerb, u_colorPred, step(0.5, v_species)) * a;
+}`;
+
+const PATCH_VS =
+  VERT_COMMON +
+  `
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec2 a_pos;
 uniform float u_radius;  // world units
@@ -97,7 +167,9 @@ void main() {
   o = u_color * a * a;
 }`;
 
-const WEDGE_VS = VERT_COMMON + `
+const WEDGE_VS =
+  VERT_COMMON +
+  `
 layout(location = 0) in vec2 a_wedge;   // t along the arc, 1 = centre vertex
 layout(location = 1) in vec4 a_inst0;
 layout(location = 2) in vec4 a_inst1;
@@ -122,7 +194,9 @@ in float v_species;
 out vec4 o;
 void main() { o = mix(u_colorHerb, u_colorPred, step(0.5, v_species)); }`;
 
-const RING_VS = VERT_COMMON + `
+const RING_VS =
+  VERT_COMMON +
+  `
 layout(location = 0) in vec2 a_corner;
 uniform vec2 u_pos;
 uniform float u_px;
@@ -144,9 +218,18 @@ void main() {
   o = u_color * a;
 }`;
 
-const LINE_VS = VERT_COMMON + `
+// Outline vertices are wrapped as offsets from an anchor (the bird), like
+// the wedge, so an outline that crosses the torus edge never spans the screen.
+const LINE_VS =
+  VERT_COMMON +
+  `
 layout(location = 0) in vec2 a_pos;
-void main() { gl_Position = vec4(toClip(a_pos), 0.0, 1.0); }`;
+uniform vec2 u_anchor;
+void main() {
+  vec2 c = u_anchor - u_center;
+  c -= floor(c + 0.5);
+  gl_Position = vec4((c + (a_pos - u_anchor)) * 2.0 * u_zoom, 0.0, 1.0);
+}`;
 
 const LINE_FS = `#version 300 es
 precision mediump float;
@@ -155,6 +238,10 @@ out vec4 o;
 void main() { o = u_color; }`;
 
 const WEDGE_SEGMENTS = 28;
+/** The ground. */
+const FIELD = '#f7f8f1';
+/** Selection ring, trail and outlines. */
+const INK = '#0b0b0b';
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
   const s = gl.createShader(type);
@@ -179,7 +266,10 @@ function program(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgr
   return p;
 }
 
-function rgba(hex: string, alpha: number): [number, number, number, number] {
+type Rgba = [number, number, number, number];
+
+/** `#rrggbb` to premultiplied RGBA. */
+function rgba(hex: string, alpha: number): Rgba {
   const n = parseInt(hex.slice(1), 16);
   const r = ((n >> 16) & 255) / 255;
   const g = ((n >> 8) & 255) / 255;
@@ -196,6 +286,7 @@ interface Pass {
 export interface RenderOptions {
   showVision: boolean;
   showPatches: boolean;
+  showTrail: boolean;
   patchRadius: number;
 }
 
@@ -219,10 +310,13 @@ export class Renderer {
   private readonly agents: WebGLBuffer;
   private readonly plants: WebGLBuffer;
   private readonly patches: WebGLBuffer;
+  private readonly trailBuf: WebGLBuffer;
   private readonly wedgeGeom: WebGLBuffer;
   private readonly line: WebGLBuffer;
   private readonly sprite: Pass;
   private readonly dot: Pass;
+  private readonly trail: Pass;
+  private readonly halo: Pass;
   private readonly patch: Pass;
   private readonly wedge: Pass;
   private readonly wedgeOne: Pass;
@@ -232,6 +326,7 @@ export class Renderer {
   private herbCount = 0;
   private plantCount = 0;
   private patchCount = 0;
+  private trailCount = 0;
   private selectedIndex = -1;
   selected: SelectedRow | null = null;
   private readonly lineScratch = new Float32Array((WEDGE_SEGMENTS + 2) * 2);
@@ -245,10 +340,11 @@ export class Renderer {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     this.quad = this.buffer(new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5]));
-    this.agents = gl.createBuffer()!;
-    this.plants = gl.createBuffer()!;
-    this.patches = gl.createBuffer()!;
-    this.line = gl.createBuffer()!;
+    this.agents = gl.createBuffer();
+    this.plants = gl.createBuffer();
+    this.patches = gl.createBuffer();
+    this.trailBuf = gl.createBuffer();
+    this.line = gl.createBuffer();
     // Wedge fan as a triangle list: (centre, t_i, t_{i+1}).
     const wedge = new Float32Array(WEDGE_SEGMENTS * 6);
     for (let i = 0; i < WEDGE_SEGMENTS; i++) {
@@ -256,19 +352,28 @@ export class Renderer {
     }
     this.wedgeGeom = this.buffer(wedge);
 
-    this.sprite = this.pass(SPRITE_VS, SPRITE_FS, ['u_center', 'u_zoom', 'u_res', 'u_time', 'u_dpr', 'u_spritePx', 'u_atlas'], () => {
+    const view = ['u_center', 'u_zoom', 'u_res'];
+    this.sprite = this.pass(SPRITE_VS, SPRITE_FS, [...view, 'u_time', 'u_dpr', 'u_spritePx', 'u_atlas'], () => {
       this.cornerAttrib(0);
       this.agentAttribs();
     });
-    this.dot = this.pass(DOT_VS, DOT_FS, ['u_center', 'u_zoom', 'u_res', 'u_px', 'u_color'], () => {
+    this.dot = this.pass(DOT_VS, DOT_FS, [...view, 'u_px', 'u_color'], () => {
       this.cornerAttrib(0);
       this.pointAttrib(1, this.plants);
     });
-    this.patch = this.pass(PATCH_VS, PATCH_FS, ['u_center', 'u_zoom', 'u_res', 'u_radius', 'u_color'], () => {
+    this.trail = this.pass(TRAIL_VS, TRAIL_FS, [...view, 'u_px', 'u_count', 'u_color'], () => {
+      this.cornerAttrib(0);
+      this.pointAttrib(1, this.trailBuf);
+    });
+    this.halo = this.pass(HALO_VS, HALO_FS, [...view, 'u_px', 'u_dpr', 'u_colorHerb', 'u_colorPred'], () => {
+      this.cornerAttrib(0);
+      this.agentAttribs();
+    });
+    this.patch = this.pass(PATCH_VS, PATCH_FS, [...view, 'u_radius', 'u_color'], () => {
       this.cornerAttrib(0);
       this.pointAttrib(1, this.patches);
     });
-    this.wedge = this.pass(WEDGE_VS, WEDGE_FS, ['u_center', 'u_zoom', 'u_res', 'u_colorHerb', 'u_colorPred'], () => {
+    this.wedge = this.pass(WEDGE_VS, WEDGE_FS, [...view, 'u_colorHerb', 'u_colorPred'], () => {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.wedgeGeom);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -276,16 +381,16 @@ export class Renderer {
     });
     // Same shaders, own VAO: its attribute pointers are re-based to the
     // selected row each frame (WebGL2 has no base-instance draw).
-    this.wedgeOne = this.pass(WEDGE_VS, WEDGE_FS, ['u_center', 'u_zoom', 'u_res', 'u_colorHerb', 'u_colorPred'], () => {
+    this.wedgeOne = this.pass(WEDGE_VS, WEDGE_FS, [...view, 'u_colorHerb', 'u_colorPred'], () => {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.wedgeGeom);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       this.agentAttribs();
     });
-    this.ring = this.pass(RING_VS, RING_FS, ['u_center', 'u_zoom', 'u_res', 'u_pos', 'u_px', 'u_color', 'u_width'], () => {
+    this.ring = this.pass(RING_VS, RING_FS, [...view, 'u_pos', 'u_px', 'u_color', 'u_width'], () => {
       this.cornerAttrib(0);
     });
-    this.outline = this.pass(LINE_VS, LINE_FS, ['u_center', 'u_zoom', 'u_res', 'u_color'], () => {
+    this.outline = this.pass(LINE_VS, LINE_FS, [...view, 'u_anchor', 'u_color'], () => {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.line);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -306,7 +411,7 @@ export class Renderer {
 
   private buffer(data: Float32Array): WebGLBuffer {
     const gl = this.gl;
-    const b = gl.createBuffer()!;
+    const b = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, b);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     return b;
@@ -315,7 +420,7 @@ export class Renderer {
   private pass(vs: string, fs: string, uniforms: string[], setup: () => void): Pass {
     const gl = this.gl;
     const prog = program(gl, vs, fs);
-    const vao = gl.createVertexArray()!;
+    const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     setup();
     gl.bindVertexArray(null);
@@ -339,16 +444,21 @@ export class Renderer {
     gl.vertexAttribDivisor(loc, 1);
   }
 
-  private agentAttribs(): void {
+  /** Per-bird attributes 1..3 over the agent buffer, starting at row `base`. */
+  private agentAttribs(base = 0): void {
     const gl = this.gl;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.agents);
     const stride = AGENT_STRIDE * 4;
+    const off = base * stride;
     gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, stride, off);
     gl.vertexAttribDivisor(1, 1);
     gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, 16);
+    gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, off + 16);
     gl.vertexAttribDivisor(2, 1);
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(3, 2, gl.FLOAT, false, stride, off + 32);
+    gl.vertexAttribDivisor(3, 1);
   }
 
   /** Match the canvas to `sizeCss` pixels square at the current DPR. */
@@ -372,15 +482,19 @@ export class Renderer {
     const m = frame[1]! | 0;
     const p = frame[2]! | 0;
     this.selectedIndex = frame[3]! | 0;
+    const t = frame[4]! | 0;
     this.agentCount = n;
     this.plantCount = m;
     this.patchCount = p;
+    this.trailCount = t;
     let off = FRAME_HEADER;
     const agents = frame.subarray(off, off + n * AGENT_STRIDE);
     off += n * AGENT_STRIDE;
     const plants = frame.subarray(off, off + m * POINT_STRIDE);
     off += m * POINT_STRIDE;
     const patches = frame.subarray(off, off + p * POINT_STRIDE);
+    off += p * POINT_STRIDE;
+    const trail = frame.subarray(off, off + t * POINT_STRIDE);
     let herb = 0;
     for (let i = 5; i < agents.length; i += AGENT_STRIDE) if (agents[i]! < 0.5) herb++;
     this.herbCount = herb;
@@ -390,6 +504,8 @@ export class Renderer {
     gl.bufferData(gl.ARRAY_BUFFER, plants, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.patches);
     gl.bufferData(gl.ARRAY_BUFFER, patches, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.trailBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, trail, gl.DYNAMIC_DRAW);
     if (this.selectedIndex >= 0 && this.selectedIndex < n) {
       const b = this.selectedIndex * AGENT_STRIDE;
       this.selected = {
@@ -419,7 +535,9 @@ export class Renderer {
   draw(opts: RenderOptions): void {
     const gl = this.gl;
     const dpr = this.dpr;
-    gl.clearColor(0.968, 0.972, 0.945, 1); // #f7f8f1, the field
+    const zoomScale = Math.pow(this.camera.zoom, 0.55);
+    const field = rgba(FIELD, 1);
+    gl.clearColor(field[0], field[1], field[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     if (opts.showPatches && this.patchCount > 0) {
@@ -444,16 +562,28 @@ export class Renderer {
     if (sel) {
       // The selected bird's own wedge, darker, then its outline.
       this.common(this.wedgeOne);
-      const stride = AGENT_STRIDE * 4;
-      const base = this.selectedIndex * stride;
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.agents);
-      gl.vertexAttribPointer(1, 4, gl.FLOAT, false, stride, base);
-      gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, base + 16);
-      const ink = rgba('#0b0b0b', 0.07);
+      this.agentAttribs(this.selectedIndex);
+      const ink = rgba(INK, 0.07);
       gl.uniform4f(this.wedgeOne.u['u_colorHerb']!, ...ink);
       gl.uniform4f(this.wedgeOne.u['u_colorPred']!, ...ink);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, WEDGE_SEGMENTS * 3, 1);
       this.drawWedgeOutline(sel);
+    }
+    if (this.agentCount > 0) {
+      // Halos sit under every bird; the shader discards rows that are not kin.
+      this.common(this.halo);
+      gl.uniform1f(this.halo.u['u_px']!, 34);
+      gl.uniform1f(this.halo.u['u_dpr']!, dpr);
+      gl.uniform4f(this.halo.u['u_colorHerb']!, ...rgba(PALETTE.herb.body, 0.2));
+      gl.uniform4f(this.halo.u['u_colorPred']!, ...rgba(PALETTE.pred.body, 0.22));
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.agentCount);
+    }
+    if (opts.showTrail && this.trailCount > 1) {
+      this.common(this.trail);
+      gl.uniform1f(this.trail.u['u_px']!, 3.2 * dpr * zoomScale);
+      gl.uniform1f(this.trail.u['u_count']!, this.trailCount);
+      gl.uniform4f(this.trail.u['u_color']!, ...rgba(INK, 0.55));
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.trailCount);
     }
     if (this.agentCount > 0) {
       this.common(this.sprite);
@@ -466,10 +596,10 @@ export class Renderer {
     if (sel) {
       this.common(this.ring);
       gl.uniform2f(this.ring.u['u_pos']!, sel.x, sel.y);
-      const radius = (sel.species > 0.5 ? 20 : 15) * sel.size * Math.pow(this.camera.zoom, 0.55) + 8;
+      const radius = (sel.species > 0.5 ? 20 : 15) * sel.size * zoomScale + 8;
       gl.uniform1f(this.ring.u['u_px']!, radius * 2 * dpr);
       gl.uniform1f(this.ring.u['u_width']!, 1.6 / radius);
-      gl.uniform4f(this.ring.u['u_color']!, 0.043, 0.043, 0.043, 1);
+      gl.uniform4f(this.ring.u['u_color']!, ...rgba(INK, 1));
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, 1);
     }
   }
@@ -489,7 +619,8 @@ export class Renderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.line);
     gl.bufferData(gl.ARRAY_BUFFER, pts, gl.DYNAMIC_DRAW);
     this.common(this.outline);
-    gl.uniform4f(this.outline.u['u_color']!, 0.043 * 0.3, 0.043 * 0.3, 0.043 * 0.3, 0.3);
+    gl.uniform2f(this.outline.u['u_anchor']!, sel.x, sel.y);
+    gl.uniform4f(this.outline.u['u_color']!, ...rgba(INK, 0.3));
     gl.drawArrays(gl.LINE_LOOP, 0, WEDGE_SEGMENTS + 2);
   }
 
@@ -498,4 +629,3 @@ export class Renderer {
     return { agents: this.agentCount, herb: this.herbCount, pred: this.agentCount - this.herbCount, plants: this.plantCount };
   }
 }
-

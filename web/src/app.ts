@@ -1,13 +1,13 @@
 /**
  * Wires the page together: worker client, renderer, charts, inspector,
- * settings, URL state and keyboard. No framework; the DOM is the state
- * for things the DOM already knows, and this class holds the rest.
+ * settings, URL state and keyboard. No framework; the DOM is the
+ * state for things the DOM already knows, and this class holds the rest.
  */
 
 import { Renderer } from './render/renderer';
 import { SimClient } from './sim/client';
 import { BASE_UPS, type EventKind } from './sim/protocol';
-import type { Config, Inspection, Shape } from './sim/types';
+import type { Config, Family, Inspection, Shape } from './sim/types';
 import { lineChart, renderTable, type Ink } from './ui/charts';
 import { clamp, fmtInt, ticksAgo } from './ui/format';
 import { History, toSample } from './ui/history';
@@ -57,10 +57,13 @@ export class App {
   private follow = false;
   private showVision = false;
   private showPatches = true;
+  private showTrail = true;
   private meteorArmed = false;
   private tableOpen = false;
   private selectedId = -1;
   private inspection: Inspection | null = null;
+  private family: Family | null = null;
+  private relatives = 0;
   private checksum = '';
   /** True while the first world is being built from settings in the URL. */
   private pendingPatch = false;
@@ -72,7 +75,10 @@ export class App {
 
   constructor() {
     this.renderer = new Renderer(this.canvas);
-    this.inspector = new Inspector(() => this.config ?? this.defaults!);
+    this.inspector = new Inspector(
+      () => this.config ?? this.defaults!,
+      (id) => this.client.selectId(id),
+    );
     this.bindWorker();
     this.bindStage();
     this.bindControls();
@@ -107,6 +113,7 @@ export class App {
     this.client.on('ready', (m) => {
       this.pendingPatch = false;
       this.seed = m.seed;
+      this.tick = m.tick;
       this.config = m.config;
       this.shape = m.shape;
       this.version = m.version;
@@ -115,6 +122,7 @@ export class App {
       this.inspector.clear();
       this.selectedId = -1;
       this.inspection = null;
+      this.family = null;
       this.follow = false;
       this.chartsDirty = true;
       $('seed-text').textContent = 'seed ' + m.seed;
@@ -139,6 +147,11 @@ export class App {
         }
         this.inspection = m.inspection;
       }
+      if (m.family !== undefined) {
+        this.family = m.family;
+        this.relatives = m.relatives ?? 0;
+      }
+      if (m.selectedId !== this.selectedId) this.family = null;
       this.selectedId = m.selectedId;
       if (this.selectedId < 0) this.inspection = null;
       this.renderer.upload(new Float32Array(m.buffer, 0, m.length));
@@ -150,6 +163,7 @@ export class App {
       this.inspector.clear();
       this.selectedId = -1;
       this.inspection = null;
+      this.family = null;
       this.chartsDirty = true;
     });
     this.client.on('genome', (m) => {
@@ -170,7 +184,7 @@ export class App {
         traits: a.traits,
         weights: a.weights,
       };
-      download(name + '.json', JSON.stringify(body, null, 2));
+      download(name + '.json', new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' }));
       toast('Saved ' + name + '.json');
     });
     this.client.on('error', (m) => {
@@ -222,11 +236,12 @@ export class App {
     this.renderer.draw({
       showVision: this.showVision,
       showPatches: this.showPatches,
+      showTrail: this.showTrail,
       patchRadius: this.config?.plants.patch_radius ?? 0.05,
     });
     this.hud();
     this.callout();
-    if (this.inspection && this.shape) this.inspector.update(this.inspection, this.tick, this.shape);
+    if (this.inspection && this.shape) this.inspector.update(this.inspection, this.tick, this.shape, this.family, this.relatives);
     else if (this.selectedId < 0) this.inspector.clear();
     if (this.chartsDirty && now - this.lastChartAt > 160) {
       updateKpis(this.history);
@@ -299,29 +314,31 @@ export class App {
     const plants = this.history.window('plants', w, POINTS).values;
     const fovH = this.history.window('fovH', w, POINTS).values;
     const fovP = this.history.window('fovP', w, POINTS).values;
-    const mini = { ink: INK, group: 'pop', height: 68, xAxis: false, ml: 40, xLabel, area: true };
-    lineChart($('c-herb'), { ...mini, series: [{ name: 'Sparrows', color: COLOR.herb, values: herb }] });
-    lineChart($('c-pred'), { ...mini, series: [{ name: 'Hawks', color: COLOR.pred, values: pred }] });
-    lineChart($('c-plants'), { ...mini, height: 82, xAxis: true, series: [{ name: 'Seeds', color: COLOR.plant, values: plants }] });
+    const ink = INK;
+    const color = COLOR;
+    const mini = { ink, group: 'pop', height: 68, xAxis: false, ml: 40, xLabel, area: true };
+    lineChart($('c-herb'), { ...mini, series: [{ name: 'Sparrows', color: color.herb, values: herb }] });
+    lineChart($('c-pred'), { ...mini, series: [{ name: 'Hawks', color: color.pred, values: pred }] });
+    lineChart($('c-plants'), { ...mini, height: 82, xAxis: true, series: [{ name: 'Seeds', color: color.plant, values: plants }] });
     lineChart($('c-fov'), {
-      ink: INK,
+      ink,
       height: 118,
       ml: 40,
       xLabel,
       yFormat: (v) => Math.round(v) + '°',
       legendEl: $('lg-fov'),
       series: [
-        { name: 'Sparrows', color: COLOR.herb, values: fovH },
-        { name: 'Hawks', color: COLOR.pred, values: fovP },
+        { name: 'Sparrows', color: color.herb, values: fovH },
+        { name: 'Hawks', color: color.pred, values: fovP },
       ],
     });
     if (this.tableOpen) {
       renderTable(
         $<HTMLTableElement>('tv'),
         [
-          { name: 'Sparrows', color: COLOR.herb, values: herb },
-          { name: 'Hawks', color: COLOR.pred, values: pred },
-          { name: 'Seeds', color: COLOR.plant, values: plants },
+          { name: 'Sparrows', color: color.herb, values: herb },
+          { name: 'Hawks', color: color.pred, values: pred },
+          { name: 'Seeds', color: color.plant, values: plants },
         ],
         xLabel,
         8,
@@ -470,15 +487,26 @@ export class App {
     $('reset-settings').addEventListener('click', () => this.settings?.reset());
     $('copy-config').addEventListener('click', () => {
       if (!this.config) return;
-      void copy(JSON.stringify(this.config, null, 2)).then(() => toast('Config copied · save it as a file for `rustywings run --config`', 4000));
+      void copy(JSON.stringify(this.config, null, 2)).then(() =>
+        toast('Config copied · save it as a file for `rustywings run --config`', 4000),
+      );
     });
     document.querySelectorAll<HTMLElement>('.sw[data-t]').forEach((sw) => {
-      sw.addEventListener('click', () => {
-        const on = sw.classList.toggle('on');
-        if (sw.dataset['t'] === 'vision') this.showVision = on;
-        if (sw.dataset['t'] === 'patches') this.showPatches = on;
-      });
+      sw.addEventListener('click', () => this.toggleSwitch(sw));
     });
+  }
+
+  private toggleSwitch(sw: HTMLElement): void {
+    const on = sw.classList.toggle('on');
+    sw.setAttribute('aria-checked', String(on));
+    const name = sw.dataset['t'];
+    if (name === 'vision') this.showVision = on;
+    else if (name === 'patches') this.showPatches = on;
+    else if (name === 'trail') this.showTrail = on;
+  }
+
+  private toggle(name: string): void {
+    document.querySelector<HTMLElement>(`.sw[data-t="${name}"]`)?.click();
   }
 
   private applyConfig(c: Config): void {
@@ -578,6 +606,7 @@ export class App {
     document.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const help = $<HTMLDialogElement>('help');
       if (help.open && e.key !== 'Escape' && e.key !== '?') return;
       switch (e.key) {
@@ -603,11 +632,13 @@ export class App {
           this.client.selectRandom();
           break;
         case 'v':
-        case 'V': {
-          const sw = document.querySelector<HTMLElement>('.sw[data-t="vision"]');
-          sw?.click();
+        case 'V':
+          this.toggle('vision');
           break;
-        }
+        case 't':
+        case 'T':
+          this.toggle('trail');
+          break;
         case 'm':
         case 'M':
           this.armMeteor(!this.meteorArmed);
@@ -639,8 +670,7 @@ async function copy(text: string): Promise<void> {
   throw new Error('clipboard unavailable');
 }
 
-function download(name: string, text: string): void {
-  const blob = new Blob([text], { type: 'application/json' });
+function download(name: string, blob: Blob): void {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;

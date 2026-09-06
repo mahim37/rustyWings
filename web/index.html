@@ -76,7 +76,7 @@
   <section class="insp" id="insp">
     <h2>Meet a bird</h2>
     <div id="insp-empty" class="empty">
-      <p>Click any bird on the map to see its energy, its body plan, what its eyes see right now and the brain it was born with.</p>
+      <p>Click any bird on the map to see its energy, its body plan, what its eyes see right now, its family and the brain it was born with.</p>
       <button class="btn" id="pick">Pick one for me</button>
     </div>
     <div id="insp-body" style="display:none">
@@ -101,6 +101,9 @@
       </div>
       <div class="sub">What it sees right now <span>left → right across its field of view</span></div>
       <div class="retina" id="retina"></div>
+      <div class="sub">Family <span>ancestors, chicks, descendants</span></div>
+      <p class="fam-empty" id="fam-empty">Looking up the family tree…</p>
+      <div class="fam tn" id="fam"></div>
       <div class="sub">Its brain <span>inherited at birth, fixed for life</span></div>
       <div class="brain-head" id="brain-head"></div>
       <div class="brain" id="brain"></div>
@@ -119,6 +122,7 @@
     </div>
     <div class="actions"><button class="btn" id="reset-settings">Reset</button><button class="btn" id="copy-config" title="Every parameter, as the JSON the command-line tool reads">Copy config</button></div>
     <div class="toggle"><span>Show every bird's vision <kbd>V</kbd></span><span class="sw" data-t="vision" role="switch" aria-checked="false"></span></div>
+    <div class="toggle"><span>Show the selected bird's trail <kbd>T</kbd></span><span class="sw on" data-t="trail" role="switch" aria-checked="true"></span></div>
     <div class="toggle"><span>Show seed patches</span><span class="sw on" data-t="patches" role="switch" aria-checked="true"></span></div>
   </section>
 </aside>
@@ -143,6 +147,7 @@
       <span><kbd>F</kbd></span><span>follow the selected bird</span>
       <span><kbd>R</kbd></span><span>select a random bird</span>
       <span><kbd>V</kbd></span><span>show every bird's field of view</span>
+      <span><kbd>T</kbd></span><span>show the selected bird's trail</span>
       <span><kbd>S</kbd></span><span>scatter seeds</span>
       <span><kbd>M</kbd></span><span>arm a meteor, then click</span>
       <span><kbd>0</kbd></span><span>reset the view</span>
