@@ -31,6 +31,7 @@
 #![warn(missing_docs, clippy::all)]
 
 mod agents;
+mod arena;
 mod brain;
 mod config;
 mod error;
@@ -44,6 +45,7 @@ mod stats;
 mod world;
 
 pub use agents::{AgentView, Agents, Species};
+pub use arena::{ARENA_PREY, ArenaReport, arena_score, arena_score_many, arena_score_random};
 pub use brain::{Brain, Topology};
 pub use config::{BrainParams, Config, EvolutionParams, PlantParams, SpeciesParams, WorldParams};
 pub use error::Error;

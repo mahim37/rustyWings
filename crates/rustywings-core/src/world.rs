@@ -211,6 +211,10 @@ impl World {
         }))
     }
 
+    pub(crate) fn set_arena_subject(&mut self, id: u64) {
+        self.arena_subject = Some(id);
+    }
+
     fn push_agent(&mut self, mut a: NewAgent) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
