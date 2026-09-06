@@ -7,18 +7,7 @@
 import type { Stats } from '../sim/types';
 
 export type SeriesKey =
-  | 'herb'
-  | 'pred'
-  | 'plants'
-  | 'fovH'
-  | 'fovP'
-  | 'rangeH'
-  | 'rangeP'
-  | 'speedH'
-  | 'speedP'
-  | 'births'
-  | 'deaths'
-  | 'predated';
+  'herb' | 'pred' | 'plants' | 'fovH' | 'fovP' | 'rangeH' | 'rangeP' | 'speedH' | 'speedP' | 'births' | 'deaths' | 'predated';
 
 export interface Sample extends Record<SeriesKey, number> {
   tick: number;
@@ -39,8 +28,7 @@ export function toSample(s: Stats): Sample {
     speedH: h.mean_max_speed,
     speedP: p.mean_max_speed,
     births: th.births + tp.births,
-    deaths:
-      th.deaths_starved + th.deaths_aged + th.deaths_predated + tp.deaths_starved + tp.deaths_aged + tp.deaths_predated,
+    deaths: th.deaths_starved + th.deaths_aged + th.deaths_predated + tp.deaths_starved + tp.deaths_aged + tp.deaths_predated,
     predated: th.deaths_predated,
   };
 }

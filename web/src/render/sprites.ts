@@ -27,15 +27,7 @@ const SPAN = [1.0, 0.95, 0.72, 0.95];
  * Draw one bird centred on `(cx, cy)` facing +x, with body radius `r`.
  * `frame` selects the wing position; `heading` rotates the whole bird.
  */
-export function drawBird(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  r: number,
-  species: Species,
-  frame = 0,
-  heading = 0,
-): void {
+export function drawBird(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, species: Species, frame = 0, heading = 0): void {
   const c = species === PREDATOR ? PALETTE.pred : PALETTE.herb;
   const hawk = species === PREDATOR;
   ctx.save();

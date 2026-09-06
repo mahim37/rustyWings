@@ -11,7 +11,8 @@ import type { Config } from './sim/types';
 
 export interface UrlState {
   seed: string | null;
-  patch: unknown | null;
+  /** Decoded `cfg` diff, or `null` when absent or malformed. */
+  patch: unknown;
 }
 
 const SEED_RE = /^(?:0x)?[0-9a-f]{1,16}$/i;

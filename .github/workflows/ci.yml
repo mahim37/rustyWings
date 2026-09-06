@@ -50,8 +50,13 @@ jobs:
         working-directory: web
       # `build` runs wasm-pack, tsc and vite in that order; the vitest suite
       # then loads the freshly built wasm in Node and checks the golden
-      # checksum against the native one.
+      # checksum against the native one. Lint needs the wasm's type
+      # declarations, so it runs after the build.
       - run: pnpm run build
+        working-directory: web
+      - run: pnpm run lint
+        working-directory: web
+      - run: pnpm run format:check
         working-directory: web
       - run: pnpm test
         working-directory: web

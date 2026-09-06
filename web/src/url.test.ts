@@ -6,7 +6,14 @@ const defaults = (): Config => ({
   world: { grid_cells: 24, initial_herbivores: 400, initial_predators: 20, max_agents: 20000 },
   plants: { initial: 3000, capacity: 8000, regrowth: 12, patches: 10, patch_radius: 0.05, patch_drift: 0.0002, scatter: 0.1 },
   brain: { retina_cells: 9, hidden: 8 },
-  evolution: { weight_mutation_rate: 0.05, weight_mutation_sigma: 0.3, weight_limit: 4, trait_mutation_sigma: 0.04, immigration_floor: 12, immigration_chance: 0.02 },
+  evolution: {
+    weight_mutation_rate: 0.05,
+    weight_mutation_sigma: 0.3,
+    weight_limit: 4,
+    trait_mutation_sigma: 0.04,
+    immigration_floor: 12,
+    immigration_chance: 0.02,
+  },
   herbivore: species(),
   predator: species(),
 });
@@ -14,8 +21,19 @@ const defaults = (): Config => ({
 function species(): Config['herbivore'] {
   const b = { min: 0, init: 1, max: 2 };
   return {
-    basal_cost: 0.00025, move_cost: 0.0009, sense_cost: 0.0002, max_energy: 1, food_energy: 0.25, eat_radius: 0.006,
-    reproduce_threshold: 0.85, child_energy: 0.35, birth_cost: 0.08, maturity_age: 300, max_age: 8000, max_turn: 0.3, max_accel: 0.15,
+    basal_cost: 0.00025,
+    move_cost: 0.0009,
+    sense_cost: 0.0002,
+    max_energy: 1,
+    food_energy: 0.25,
+    eat_radius: 0.006,
+    reproduce_threshold: 0.85,
+    child_energy: 0.35,
+    birth_cost: 0.08,
+    maturity_age: 300,
+    max_age: 8000,
+    max_turn: 0.3,
+    max_accel: 0.15,
     traits: { fov_angle: b, fov_range: b, max_speed: b, size: b },
   };
 }
