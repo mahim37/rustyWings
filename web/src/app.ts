@@ -38,6 +38,11 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   return e as T;
 };
 
+interface Pointer {
+  x: number;
+  y: number;
+}
+
 export class App {
   private readonly client = new SimClient();
   private readonly renderer: Renderer;
@@ -388,45 +393,79 @@ export class App {
     new ResizeObserver(fit).observe(stage);
     fit();
 
-    let down: { x: number; y: number; cx: number; cy: number; moved: boolean } | null = null;
+    // One finger (or the mouse) drags to pan and taps to select; two fingers
+    // pinch to zoom about their midpoint while their midpoint pans.
+    const pointers = new Map<number, Pointer>();
+    let press: Pointer | null = null;
+    let moved = false;
+    let pinch: { dist: number; mid: Pointer } | null = null;
+    const local = (e: PointerEvent): Pointer => {
+      const r = this.canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const pinchState = (): { dist: number; mid: Pointer } => {
+      const [a, b] = [...pointers.values()] as [Pointer, Pointer];
+      return { dist: Math.hypot(b.x - a.x, b.y - a.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+    };
     this.canvas.addEventListener('pointerdown', (e) => {
       this.canvas.setPointerCapture(e.pointerId);
-      down = { x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, moved: false };
+      pointers.set(e.pointerId, local(e));
+      if (pointers.size === 1) {
+        press = local(e);
+        moved = false;
+        pinch = null;
+      } else if (pointers.size === 2) {
+        pinch = pinchState();
+        moved = true;
+      }
     });
     this.canvas.addEventListener('pointermove', (e) => {
-      if (!down) return;
-      const dx = e.clientX - down.cx;
-      const dy = e.clientY - down.cy;
-      if (Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y) > 4) down.moved = true;
-      if (down.moved) {
-        this.renderer.camera.panByPixels(dx, dy);
+      if (!pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId)!;
+      const cur = local(e);
+      pointers.set(e.pointerId, cur);
+      if (pointers.size >= 2 && pinch) {
+        const next = pinchState();
+        if (pinch.dist > 0) this.renderer.camera.zoomAt(next.dist / pinch.dist, next.mid.x, next.mid.y);
+        this.renderer.camera.panByPixels(next.mid.x - pinch.mid.x, next.mid.y - pinch.mid.y);
+        pinch = next;
+        this.follow = false;
+        return;
+      }
+      if (!press) return;
+      if (Math.abs(cur.x - press.x) + Math.abs(cur.y - press.y) > 4) moved = true;
+      if (moved) {
+        this.renderer.camera.panByPixels(cur.x - prev.x, cur.y - prev.y);
         this.follow = false;
       }
-      down.cx = e.clientX;
-      down.cy = e.clientY;
     });
-    this.canvas.addEventListener('pointerup', (e) => {
-      if (!down) return;
-      const wasClick = !down.moved;
-      down = null;
-      if (!wasClick) return;
-      const r = this.canvas.getBoundingClientRect();
-      const [wx, wy] = this.renderer.camera.screenToWorld(e.clientX - r.left, e.clientY - r.top);
+    const release = (e: PointerEvent, click: boolean): void => {
+      pointers.delete(e.pointerId);
+      if (pointers.size === 1) pinch = null;
+      if (pointers.size > 0) return;
+      const tap = click && press && !moved;
+      press = null;
+      if (!tap) return;
+      const p = local(e);
+      const [wx, wy] = this.renderer.camera.screenToWorld(p.x, p.y);
       if (this.meteorArmed) {
         this.armMeteor(false);
         this.client.strike(wx, wy, METEOR_RADIUS);
       } else {
         this.client.select(wx, wy, PICK_RADIUS_PX * this.renderer.camera.unitsPerPixel);
       }
-    });
-    this.canvas.addEventListener('pointercancel', () => (down = null));
+    };
+    this.canvas.addEventListener('pointerup', (e) => release(e, true));
+    this.canvas.addEventListener('pointercancel', (e) => release(e, false));
     this.canvas.addEventListener(
       'wheel',
       (e) => {
         e.preventDefault();
+        const p = { x: e.clientX, y: e.clientY };
         const r = this.canvas.getBoundingClientRect();
-        const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016));
-        this.renderer.camera.zoomAt(factor, e.clientX - r.left, e.clientY - r.top);
+        // Trackpad pinches arrive as ctrl+wheel with small deltas.
+        const k = e.ctrlKey ? 0.01 : e.deltaMode === 1 ? 0.05 : 0.0016;
+        this.renderer.camera.zoomAt(Math.exp(-e.deltaY * k), p.x - r.left, p.y - r.top);
       },
       { passive: false },
     );
