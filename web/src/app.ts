@@ -1,6 +1,6 @@
 /**
  * Wires the page together: worker client, renderer, charts, inspector,
- * settings, URL state and keyboard. No framework; the DOM is the
+ * settings, files, URL state and input. No framework; the DOM is the
  * state for things the DOM already knows, and this class holds the rest.
  */
 
@@ -31,6 +31,8 @@ const PICK_RADIUS_PX = 14;
 
 const INK: Ink = { primary: '#0b0b0b', secondary: '#52514e', muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7', surface: '#fcfcfb' };
 const COLOR = { herb: '#2a78d6', pred: '#eb6834', plant: '#1baf7a' };
+/** Extension of a saved world; the CLI's `--resume` reads the same bytes. */
+const WORLD_EXT = '.world';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const e = document.getElementById(id);
@@ -82,6 +84,7 @@ export class App {
     this.bindWorker();
     this.bindStage();
     this.bindControls();
+    this.bindFiles();
     this.bindKeys();
   }
 
@@ -132,6 +135,7 @@ export class App {
       this.client.speed(SPEEDS[this.speedIdx]!.ups);
       this.client.play(this.playing);
       $('stage-error').style.display = 'none';
+      if (m.tick > 0) toast(`Opened a world at tick ${fmtInt(m.tick)}`);
     });
     this.client.on('frame', (m) => {
       this.tick = m.tick;
@@ -187,6 +191,11 @@ export class App {
       download(name + '.json', new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' }));
       toast('Saved ' + name + '.json');
     });
+    this.client.on('export', (m) => {
+      const name = `rustywings-${m.seed}-t${m.tick}${WORLD_EXT}`;
+      download(name, new Blob([m.bytes], { type: 'application/octet-stream' }));
+      toast(`Saved ${name} · open it here later, or run it with \`rustywings run --resume\``, 5000);
+    });
     this.client.on('error', (m) => {
       if (m.fatal && this.pendingPatch && this.defaults) {
         // A shared link carried settings the sim refused; the world is still
@@ -215,6 +224,9 @@ export class App {
         break;
       case 'spawn':
         toast(`${fmtInt(detail)} birds released`);
+        break;
+      case 'introduce':
+        toast(`Released bird #${detail} from the file; it is selected`);
         break;
       case 'snapshot':
         toast(`Snapshot saved at tick ${fmtInt(detail)}`);
@@ -507,6 +519,62 @@ export class App {
 
   private toggle(name: string): void {
     document.querySelector<HTMLElement>(`.sw[data-t="${name}"]`)?.click();
+  }
+
+  // ----- files ----------------------------------------------------------
+
+  private bindFiles(): void {
+    const input = $<HTMLInputElement>('file-in');
+    $('save-world').addEventListener('click', () => this.client.export());
+    $('open-world').addEventListener('click', () => {
+      input.accept = WORLD_EXT;
+      input.click();
+    });
+    $('release').addEventListener('click', () => {
+      input.accept = '.json';
+      input.click();
+    });
+    input.addEventListener('change', () => {
+      const f = input.files?.[0];
+      input.value = '';
+      if (f) void this.openFile(f);
+    });
+    // Dropping a file anywhere on the stage opens it.
+    const stage = $('stage');
+    stage.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      stage.classList.add('drop');
+    });
+    stage.addEventListener('dragleave', () => stage.classList.remove('drop'));
+    stage.addEventListener('drop', (e) => {
+      e.preventDefault();
+      stage.classList.remove('drop');
+      const f = e.dataTransfer?.files[0];
+      if (f) void this.openFile(f);
+    });
+  }
+
+  /** A `.world` file replaces the world; a genome `.json` releases a bird. */
+  private async openFile(f: File): Promise<void> {
+    if (f.name.endsWith(WORLD_EXT)) {
+      this.client.restore(await f.arrayBuffer());
+      return;
+    }
+    if (f.name.endsWith('.json')) {
+      const text = await f.text();
+      let species: 0 | 1;
+      try {
+        const g = JSON.parse(text) as { format?: string; species?: string };
+        if (g.format !== 'rustywings-genome') throw new Error('not a genome');
+        species = g.species === 'Predator' ? 1 : 0;
+      } catch {
+        toast(`${f.name} is not a saved genome`);
+        return;
+      }
+      this.client.introduce(species, text);
+      return;
+    }
+    toast(`Drop a ${WORLD_EXT} file to open a world, or a saved genome .json to release a bird`, 4000);
   }
 
   private applyConfig(c: Config): void {

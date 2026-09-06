@@ -21,12 +21,17 @@
     <button class="btn on" id="play" title="Pause / play (Space)">⏸</button>
     <button class="btn" id="stepbtn" title="Step one tick (.)">⏭</button>
     <div class="seg" id="speed" role="group" aria-label="speed"></div>
-    <button class="btn" id="snapshot" title="Save a snapshot of this moment">Snapshot</button>
+    <button class="btn" id="snapshot" title="Remember this moment; Rewind returns to it">Snapshot</button>
     <button class="btn" id="seeds" title="Scatter 400 seeds (S)">Scatter seeds</button>
     <button class="btn" id="meteor" title="Drop a meteor where you click next (M)">Meteor</button>
-    <button class="btn" id="share" title="Copy a link that replays this world">Share this world</button>
+    <div class="seg">
+      <button class="btn" id="save-world" title="Download this world as a file. Open it here later, or continue it with the command-line tool.">Save world</button>
+      <button class="btn" id="open-world" title="Open a saved .world file (or drop one on the map)">Open</button>
+    </div>
+    <button class="btn" id="share" title="Copy a link that replays this world from tick 0">Share</button>
     <button class="btn icon" id="help-btn" title="Help (?)">?</button>
   </div>
+  <input type="file" id="file-in" hidden>
 </header>
 
 <main class="stage" id="stage">
@@ -39,6 +44,7 @@
   <div class="callout" id="callout" style="display:none"></div>
   <div class="welcome" id="welcome"><button class="x" id="wx" aria-label="dismiss">✕</button><b>Sparrows eat seeds. Hawks eat sparrows.</b> Nobody is programmed to do anything. Every bird's brain is inherited, mutated, and kept only if it worked. Click any bird to meet it.</div>
   <div class="hint">click a bird · drag to pan · wheel to zoom · double-click to reset</div>
+  <div class="drop-hint">Drop a .world file to open it, or a saved genome to release that bird</div>
   <div class="stage-error" id="stage-error" style="display:none" role="alert"></div>
 </main>
 
@@ -77,7 +83,7 @@
     <h2>Meet a bird</h2>
     <div id="insp-empty" class="empty">
       <p>Click any bird on the map to see its energy, its body plan, what its eyes see right now, its family and the brain it was born with.</p>
-      <button class="btn" id="pick">Pick one for me</button>
+      <div class="actions"><button class="btn" id="pick">Pick one for me</button><button class="btn" id="release" title="Release a bird from a saved genome file into this world">Release a saved genome</button></div>
     </div>
     <div id="insp-body" style="display:none">
       <div class="meet">
@@ -155,6 +161,7 @@
     </div>
     <h3>Reproducible by design</h3>
     <p>The seed in the header and the settings you choose define the world completely. The same link replays the same world, tick for tick, on any machine, and the checksum in the status bar matches what the native command-line build prints for the same seed and tick.</p>
+    <p><b>Save world</b> writes this exact moment to a file. Open it here later, drop it on the map, or continue it headless with <code>rustywings run --resume</code>; <code>rustywings verify --resume … --ticks 0</code> prints the checksum you saw when you saved. <b>Save genome</b> writes one bird's body plan and brain; drop that file on another world to release the bird there.</p>
     <p class="credit">Built in Rust, compiled to WebAssembly, simulated on a Web Worker and drawn with WebGL2. Inspired by Patryk Wychowaniec's <em>Learning to Fly</em> series; the simulation, the ecosystem and this frontend are original work. <a href="https://github.com/mahim37/rustyWings" target="_blank" rel="noopener">Source on GitHub</a>.</p>
   </div>
 </dialog>
