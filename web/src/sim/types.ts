@@ -135,6 +135,29 @@ export interface Shape {
   channels: number;
 }
 
+export type Cause = 'Starved' | 'Aged' | 'Predated' | 'Struck';
+
+/** One bird's entry in the lineage log, alive or dead. */
+export interface LineageRecord {
+  id: number;
+  parent: number;
+  species: 'Herbivore' | 'Predator';
+  generation: number;
+  born: number;
+  died: number | null;
+  cause: Cause | null;
+  children: number;
+}
+
+/** What `Sim.family` returns. */
+export interface Family {
+  subject: LineageRecord;
+  /** Parent first, then grandparent, and so on. */
+  ancestors: LineageRecord[];
+  children: LineageRecord[];
+  living_descendants: number;
+}
+
 export function speciesIndex(s: Inspection['species']): Species {
   return s === 'Predator' ? PREDATOR : HERBIVORE;
 }

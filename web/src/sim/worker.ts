@@ -8,7 +8,7 @@
 
 import init, { Sim } from '../wasm/rustywings_wasm.js';
 import { BASE_UPS, SAMPLE_STRIDE, type FrameMessage, type FromWorker, type ToWorker } from './protocol';
-import type { Config, Inspection, Stats } from './types';
+import type { Config, Family, Inspection, Shape, Stats } from './types';
 
 interface Scope {
   postMessage(m: FromWorker, transfer?: Transferable[]): void;
@@ -25,13 +25,14 @@ const MAX_BUDGET_MS = 12;
 const FRAME_MS = 15;
 /** Heartbeat while paused, so the page still gets ups/tick updates. */
 const IDLE_MS = 500;
+/** How often the selected bird's family and relatives are recomputed, ms. */
+const FAMILY_MS = 1000;
 
 let sim: Sim | null = null;
 let seed = '1';
 let config: Config | null = null;
 let playing = false;
 let targetUps = BASE_UPS;
-let selectedId = -1;
 let acc = 0;
 let last = performance.now();
 let msPerTick = 1;
@@ -44,6 +45,7 @@ let upsTicks = 0;
 let upsSince = performance.now();
 let ups = 0;
 let lastChecksumAt = 0;
+let lastFamilyAt = 0;
 let snapshot: { bytes: Uint8Array; tick: number } | null = null;
 
 // Scheduling: a MessageChannel gives a macrotask without the 4 ms clamp
@@ -122,20 +124,25 @@ function loop(): void {
   schedule();
 }
 
+function select(id: number): void {
+  if (!sim) return;
+  sim.select(id);
+  // A fresh selection gets its family straight away rather than at the next
+  // one-second mark.
+  lastFamilyAt = 0;
+}
+
 function maybeFrame(now: number): void {
   if (!sim || inFlight >= 2) return;
   const since = now - lastFrameAt;
   if (since < FRAME_MS) return;
   if (!dirty && since < IDLE_MS) return;
-  const len = sim.packFrame(selectedId);
-  let buffer = pool.pop();
-  if (!buffer || buffer.byteLength < len * 4) buffer = new ArrayBuffer(Math.ceil(len * 1.25) * 4 + 4096);
-  sim.copyFrame(new Float32Array(buffer, 0, len));
+  const selectedId = sim.selected();
   const msg: FrameMessage = {
     type: 'frame',
     tick: sim.tick(),
-    buffer,
-    length: len,
+    buffer: new ArrayBuffer(0),
+    length: 0,
     ups,
     playing,
     samples,
@@ -144,8 +151,19 @@ function maybeFrame(now: number): void {
   if (selectedId >= 0) {
     const insp = sim.inspect(selectedId) as Inspection | undefined;
     msg.inspection = insp ?? null;
-    if (!insp) selectedId = -1;
+    if (!insp) select(-1);
+    else if (now - lastFamilyAt >= FAMILY_MS) {
+      msg.relatives = sim.refreshRelatives();
+      msg.family = (sim.family(selectedId) as Family | undefined) ?? null;
+      lastFamilyAt = now;
+    }
   }
+  const len = sim.packFrame();
+  let buffer = pool.pop();
+  if (!buffer || buffer.byteLength < len * 4) buffer = new ArrayBuffer(Math.ceil(len * 1.25) * 4 + 4096);
+  sim.copyFrame(new Float32Array(buffer, 0, len));
+  msg.buffer = buffer;
+  msg.length = len;
   if (now - lastChecksumAt >= 1000) {
     msg.checksum = sim.checksum();
     lastChecksumAt = now;
@@ -162,29 +180,33 @@ function fail(err: unknown, fatal: boolean): void {
   post({ type: 'error', message, fatal });
 }
 
+/** Swap in a new world and tell the page about it. */
+function adopt(next: Sim): void {
+  sim?.free();
+  sim = next;
+  seed = sim.seed();
+  config = sim.config() as Config;
+  snapshot = null;
+  samples = [];
+  acc = 0;
+  last = performance.now();
+  sample();
+  post({ type: 'ready', seed, tick: sim.tick(), config, shape: sim.shape() as Shape, version: Sim.version() });
+  dirty = true;
+  schedule();
+}
+
 function create(newSeed: string, cfg: Config | null): void {
   try {
-    const next = new Sim(newSeed, cfg ? JSON.stringify(cfg) : undefined);
-    sim?.free();
-    sim = next;
-    seed = sim.seed();
-    config = sim.config() as Config;
-    snapshot = null;
-    samples = [];
-    selectedId = -1;
-    acc = 0;
-    last = performance.now();
-    sample();
-    post({ type: 'ready', seed, config, shape: sim.shape(), version: Sim.version() });
-    dirty = true;
-    schedule();
+    adopt(new Sim(newSeed, cfg ? JSON.stringify(cfg) : undefined));
   } catch (err) {
     fail(err, true);
   }
 }
 
-scope.onmessage = async (e: MessageEvent<ToWorker>) => {
-  const m = e.data;
+scope.onmessage = (e: MessageEvent<ToWorker>) => void handle(e.data);
+
+async function handle(m: ToWorker): Promise<void> {
   if (m.type === 'defaults') {
     await ready;
     post({ type: 'defaults', config: Sim.defaultConfig() as Config, version: Sim.version() });
@@ -193,6 +215,16 @@ scope.onmessage = async (e: MessageEvent<ToWorker>) => {
   if (m.type === 'init') {
     await ready;
     create(m.seed, m.config);
+    return;
+  }
+  if (m.type === 'restore') {
+    await ready;
+    try {
+      adopt(Sim.restore(new Uint8Array(m.bytes)));
+    } catch (err) {
+      // A bad file must not take down a world that was running fine.
+      fail(err, sim === null);
+    }
     return;
   }
   if (m.type === 'recycle') {
@@ -218,15 +250,15 @@ scope.onmessage = async (e: MessageEvent<ToWorker>) => {
       break;
     case 'select': {
       const i = sim.agentAt(m.x, m.y, m.radius);
-      selectedId = i >= 0 ? sim.idAt(i) : -1;
+      select(i >= 0 ? sim.idAt(i) : -1);
       break;
     }
     case 'selectId':
-      selectedId = m.id;
+      select(m.id);
       break;
     case 'selectRandom': {
       const n = sim.agentCount();
-      selectedId = n > 0 ? sim.idAt(Math.floor(Math.random() * n)) : -1;
+      select(n > 0 ? sim.idAt(Math.floor(Math.random() * n)) : -1);
       break;
     }
     case 'strike':
@@ -237,6 +269,15 @@ scope.onmessage = async (e: MessageEvent<ToWorker>) => {
       break;
     case 'spawn':
       post({ type: 'event', kind: 'spawn', detail: sim.spawn(m.species, m.n), tick: sim.tick() });
+      break;
+    case 'introduce':
+      try {
+        const id = sim.introduce(m.species, m.genome);
+        select(id);
+        post({ type: 'event', kind: 'introduce', detail: id, tick: sim.tick() });
+      } catch (err) {
+        fail(err, false);
+      }
       break;
     case 'config':
       try {
@@ -256,7 +297,6 @@ scope.onmessage = async (e: MessageEvent<ToWorker>) => {
           const restored = Sim.restore(snapshot.bytes);
           sim.free();
           sim = restored;
-          selectedId = -1;
           samples = [];
           post({ type: 'reset', tick: sim.tick() });
           post({ type: 'event', kind: 'rewind', detail: sim.tick(), tick: sim.tick() });
@@ -269,10 +309,19 @@ scope.onmessage = async (e: MessageEvent<ToWorker>) => {
         post({ type: 'event', kind: 'restart', detail: 0, tick: 0 });
       }
       break;
+    case 'export': {
+      const bytes = sim.snapshot();
+      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      post({ type: 'export', bytes: buffer, seed, tick: sim.tick() }, [buffer]);
+      break;
+    }
     case 'genome':
       post({ type: 'genome', inspection: (sim.inspect(m.id) as Inspection | undefined) ?? null, seed, tick: sim.tick() });
+      break;
+    case 'family':
+      post({ type: 'family', id: m.id, family: (sim.family(m.id) as Family | undefined) ?? null });
       break;
   }
   dirty = true;
   schedule();
-};
+}

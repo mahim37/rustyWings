@@ -13,6 +13,9 @@
 //!   and unknown or invalid fields come back as a thrown `Error` whose message
 //!   names the dotted path.
 //! * Render state crosses as one `Float32Array`, see [`frame`].
+//! * The `Sim` remembers which bird is selected so it can record that bird's
+//!   trail every tick and flag its relatives in every frame; the page only
+//!   has to say when the selection changes.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, clippy::all)]
@@ -38,14 +41,19 @@ pub fn format_seed(seed: u64) -> String {
     format!("{seed:x}")
 }
 
+/// Trail points kept for the selected bird, one per tick.
+pub const TRAIL_LEN: usize = 512;
+
 #[cfg(target_arch = "wasm32")]
 mod bindings {
+    use std::collections::VecDeque;
+
     use js_sys::Float32Array;
-    use rustywings_core::{AgentView, Config, Species, Stats, World};
-    use serde::Serialize;
+    use rustywings_core::{AgentView, Config, Genome, Species, Stats, Traits, World};
+    use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
 
-    use crate::frame;
+    use crate::{TRAIL_LEN, frame};
 
     fn to_js<T: Serialize>(v: &T) -> Result<JsValue, JsError> {
         let s = serde_wasm_bindgen::Serializer::json_compatible();
@@ -81,11 +89,50 @@ mod bindings {
         channels: usize,
     }
 
+    /// The parts of a saved genome file that matter. Everything else in the
+    /// file (seed, tick, id, version) is provenance and is ignored.
+    #[derive(Deserialize)]
+    struct GenomeFile {
+        traits: Traits,
+        weights: Vec<f32>,
+    }
+
     /// One world, as seen from JavaScript.
     #[wasm_bindgen]
     pub struct Sim {
         world: World,
         frame: Vec<f32>,
+        selected: Option<u64>,
+        /// Sorted ids the map highlights as the selected bird's relatives.
+        kin: Vec<u64>,
+        /// The selected bird's recent positions, oldest first.
+        trail: VecDeque<(f32, f32)>,
+    }
+
+    impl Sim {
+        fn wrap(world: World) -> Sim {
+            Sim {
+                world,
+                frame: Vec::new(),
+                selected: None,
+                kin: Vec::new(),
+                trail: VecDeque::with_capacity(TRAIL_LEN),
+            }
+        }
+
+        fn record_trail(&mut self) {
+            let Some(id) = self.selected else { return };
+            let agents = self.world.agents();
+            match agents.index_of(id) {
+                Some(i) => {
+                    if self.trail.len() == TRAIL_LEN {
+                        self.trail.pop_front();
+                    }
+                    self.trail.push_back((agents.x[i], agents.y[i]));
+                }
+                None => self.trail.clear(),
+            }
+        }
     }
 
     #[wasm_bindgen]
@@ -99,20 +146,14 @@ mod bindings {
             let seed = crate::parse_seed(seed).map_err(|e| JsError::new(&e))?;
             let config = config_from_json(config_json)?;
             let world = World::new(config, seed).map_err(|e| JsError::new(&e.to_string()))?;
-            Ok(Sim {
-                world,
-                frame: Vec::new(),
-            })
+            Ok(Sim::wrap(world))
         }
 
         /// Rebuild a world from `snapshot()` output.
         pub fn restore(bytes: &[u8]) -> Result<Sim, JsError> {
             console_error_panic_hook::set_once();
             let world = World::from_snapshot(bytes).map_err(|e| JsError::new(&e.to_string()))?;
-            Ok(Sim {
-                world,
-                frame: Vec::new(),
-            })
+            Ok(Sim::wrap(world))
         }
 
         /// The default configuration as a plain object.
@@ -151,9 +192,54 @@ mod bindings {
             self.world.tick() as f64
         }
 
-        /// Advance `n` ticks.
+        /// Advance `n` ticks, extending the selected bird's trail as it goes.
         pub fn step(&mut self, n: u32) {
-            self.world.run(u64::from(n));
+            if self.selected.is_none() {
+                self.world.run(u64::from(n));
+                return;
+            }
+            for _ in 0..n {
+                self.world.step();
+                self.record_trail();
+            }
+        }
+
+        /// Select the bird with `id` (`-1` for none). The trail and the
+        /// relatives set start afresh; call `refreshRelatives` to fill the
+        /// latter.
+        pub fn select(&mut self, id: f64) {
+            let next = (id >= 0.0).then_some(id as u64);
+            if next != self.selected {
+                self.trail.clear();
+                self.kin.clear();
+            }
+            self.selected = next;
+        }
+
+        /// Id of the selected bird, or `-1`.
+        pub fn selected(&self) -> f64 {
+            self.selected.map_or(-1.0, |id| id as f64)
+        }
+
+        /// Ancestors, chicks and living descendants of the bird with `id`,
+        /// alive or dead, or `undefined` once the lineage log has let it go.
+        pub fn family(&self, id: f64) -> Result<JsValue, JsError> {
+            match self.world.family(id as u64) {
+                Some(f) => to_js(&f),
+                None => Ok(JsValue::UNDEFINED),
+            }
+        }
+
+        /// Recompute which living birds count as the selected bird's
+        /// relatives (they get flagged in every frame until the next call)
+        /// and return how many there are.
+        #[wasm_bindgen(js_name = refreshRelatives)]
+        pub fn refresh_relatives(&mut self) -> u32 {
+            self.kin = match self.selected {
+                Some(id) => self.world.relatives(id),
+                None => Vec::new(),
+            };
+            self.kin.len() as u32
         }
 
         /// Living birds.
@@ -239,12 +325,35 @@ mod bindings {
             self.world.spawn_founders(Species::from_u8(species), n)
         }
 
-        /// Pack the render frame for `selected_id` (`-1` for none) and return
-        /// its length in floats. Follow with `copyFrame`.
+        /// Release one bird of `species` carrying the genome in a saved
+        /// genome file (JSON text, as written by the "Save genome" button).
+        /// Returns the new bird's id. Throws if the weights do not fit this
+        /// world's brain shape.
+        pub fn introduce(&mut self, species: u8, genome_json: String) -> Result<f64, JsError> {
+            let file: GenomeFile = serde_json::from_str(&genome_json)
+                .map_err(|e| JsError::new(&format!("genome file: {e}")))?;
+            let genome = Genome {
+                traits: file.traits,
+                weights: file.weights,
+            };
+            self.world
+                .introduce(Species::from_u8(species), genome)
+                .map(|id| id as f64)
+                .map_err(|e| JsError::new(&e.to_string()))
+        }
+
+        /// Pack the render frame and return its length in floats. Follow
+        /// with `copyFrame`.
         #[wasm_bindgen(js_name = packFrame)]
-        pub fn pack_frame(&mut self, selected_id: f64) -> u32 {
-            let selected = (selected_id >= 0.0).then_some(selected_id as u64);
-            frame::pack(&self.world, selected, &mut self.frame);
+        pub fn pack_frame(&mut self) -> u32 {
+            self.trail.make_contiguous();
+            frame::pack(
+                &self.world,
+                self.selected,
+                &self.kin,
+                self.trail.as_slices().0,
+                &mut self.frame,
+            );
             self.frame.len() as u32
         }
 

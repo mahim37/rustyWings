@@ -35,6 +35,18 @@ export class SimClient {
   init(seed: string, config: Config | null): void {
     this.send({ type: 'init', seed, config });
   }
+  restore(bytes: ArrayBuffer): void {
+    this.send({ type: 'restore', bytes }, [bytes]);
+  }
+  export(): void {
+    this.send({ type: 'export' });
+  }
+  introduce(species: 0 | 1, genome: string): void {
+    this.send({ type: 'introduce', species, genome });
+  }
+  family(id: number): void {
+    this.send({ type: 'family', id });
+  }
   play(playing: boolean): void {
     this.send({ type: 'play', playing });
   }
