@@ -30,18 +30,30 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs, clippy::all)]
 
+mod agents;
 mod brain;
+mod config;
 mod error;
+mod genome;
 mod grid;
 pub mod math;
+mod plants;
 mod retina;
 mod rng;
+mod stats;
+mod world;
 
+pub use agents::{AgentView, Agents, Species};
 pub use brain::{Brain, Topology};
+pub use config::{BrainParams, Config, EvolutionParams, PlantParams, SpeciesParams, WorldParams};
 pub use error::Error;
+pub use genome::{Bound, Genome, TraitBounds, Traits};
 pub use grid::Grid;
+pub use plants::Plants;
 pub use retina::{CHANNELS, Retina};
 pub use rng::Rng;
+pub use stats::{SpeciesStats, Stats, TickCounters};
+pub use world::World;
 
 /// Crate version, exposed so snapshots and the UI can report it.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
