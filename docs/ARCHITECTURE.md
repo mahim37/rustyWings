@@ -93,14 +93,25 @@ speed, energy, id, seed position and the RNG state.
 ## Data layout and the browser boundary
 
 Hot agent state is struct-of-arrays (`Agents`: `x`, `y`, `heading`, `speed`,
-`energy`, `species`, …). Cold state (genomes, lineage) sits alongside. The wasm
-crate exposes pointers and lengths into these arrays; the frontend wraps them
-as `Float32Array` views over wasm memory and uploads them straight to WebGL2
-instance buffers. Nothing is copied per frame. Removing a bird swap-removes
-every column in lock step, so views stay valid until the next step.
+`energy`, `species`, …). Cold state (genomes, lineage) sits alongside. Removing
+a bird swap-removes every column in lock step. The per-tick loops stream
+through contiguous arrays, and exporting a frame is one linear pass.
 
-The simulation runs on a Web Worker. The main thread only renders and handles
-input; it receives one message per frame with the current buffers.
+In the browser the simulation runs on a Web Worker and the renderer on the
+main thread, so render state crosses a thread boundary once per frame. The
+wasm crate packs it into one flat `f32` buffer (`frame.rs`: a four-float
+header, then eight floats per bird, two per seed, two per patch centre); the
+worker copies that into a transferable `ArrayBuffer` and posts it. The page
+uploads slices of it straight into WebGL2 instance buffers and sends the
+buffer back to be reused, so two buffers circulate and nothing is allocated in
+steady state. That is one copy per frame, about 200 KB at five thousand birds,
+which is far cheaper than the alternative: `SharedArrayBuffer` would need
+cross-origin isolation headers and a threaded wasm build for a view that the
+main thread could only read mid-tick. See decision 0006.
+
+Everything else crosses as plain values: stats and inspections as objects,
+configuration as JSON text (so unknown fields are rejected by name), seeds as
+hex strings, ids and ticks as doubles.
 
 ## Configuration
 
@@ -139,13 +150,41 @@ bit-for-bit identically to the original.
   at a chosen population, so performance regressions are numbers, not
   impressions.
 
-## Crates
+## Crates and the frontend
 
 ```
 crates/rustywings-core   the simulation (no I/O, no threads, wasm-clean)
 crates/rustywings-cli    native runner: run, bench, verify, arena, config
-crates/rustywings-wasm   wasm-bindgen facade (milestone 2)
-web/                     Vite + TypeScript frontend (milestone 2)
+crates/rustywings-wasm   wasm-bindgen facade: Sim, frame packing, JSON config
+web/                     Vite + TypeScript frontend; no framework
 libs/, www/              the original tutorial-derived code, kept building
-                         until the new frontend replaces the deployment
+                         until milestone 3 removes it
 ```
+
+### Frontend
+
+`web/src/sim/worker.ts` owns the `Sim`. It runs a fixed-timestep accumulator
+at the requested rate (1×, 4×, 16× real time, or flat out with a 12 ms budget
+per turn), samples `stats()` every 25 ticks regardless of speed, and posts a
+frame whenever a recycled buffer is free and 15 ms have passed. A slow machine
+therefore slows the world down; it never freezes the page. `client.ts` is the
+typed handle the page talks to; `protocol.ts` is the message contract and
+mirrors the frame layout constants from `frame.rs`.
+
+`render/renderer.ts` draws with WebGL2 in five instanced draw calls: seed
+patches, seeds, vision wedges, illustrated bird sprites from a Canvas-drawn
+atlas, and the selection ring. The camera is a centre and a zoom on the unit
+torus; positions are wrapped relative to the centre in the vertex shader, so
+panning across an edge is seamless. World `+y` is up on screen.
+
+`ui/history.ts` keeps the sampled stats and serves windowed, bucket-averaged
+series to the SVG charts (`ui/charts.ts`), which share a linked crosshair.
+The inspector shows a bird's retina activation and hidden-layer weights;
+the four plain-language sliders write into the real config (`ui/settings.ts`)
+and the world adopts it live through `World::set_config`.
+
+State that matters is in the URL: `?seed=<hex>` and, when settings differ from
+the defaults, `&cfg=<base64url JSON diff>`. The same link replays the same
+world. The status bar shows the world checksum; `rustywings verify --seed S
+--ticks T` prints the same digits natively, and the vitest suite loads the
+built wasm in Node and asserts the golden value from the Rust tests.

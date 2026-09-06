@@ -1,0 +1,26 @@
+{
+  "name": "rustywings-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Browser frontend for rustyWings: a co-evolving ecosystem of neural-network birds, simulated in Rust/WebAssembly on a Web Worker and drawn with WebGL2.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:wasm": "wasm-pack build ../crates/rustywings-wasm --target web --out-dir ../../web/src/wasm --release",
+    "dev": "vite",
+    "build": "pnpm run build:wasm && pnpm run check && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
+  },
+  "packageManager": "pnpm@10.30.3"
+}

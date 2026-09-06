@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# wasm-pack output; built by `pnpm build:wasm`, never committed
+src/wasm/
+.shots/
