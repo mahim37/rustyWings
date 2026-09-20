@@ -8,7 +8,7 @@
 set -euo pipefail
 
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
-export PATH="$CARGO_HOME/bin:$PATH"
+export PATH="$(npm config get prefix)/bin:$CARGO_HOME/bin:$PATH"
 
 if ! command -v rustup >/dev/null 2>&1; then
   echo "== installing rustup"
@@ -25,9 +25,17 @@ if ! command -v wasm-pack >/dev/null 2>&1; then
 fi
 wasm-pack --version
 
-if ! command -v pnpm >/dev/null 2>&1; then
-  echo "== installing pnpm"
-  npm install -g pnpm@10
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+if command -v corepack >/dev/null 2>&1; then
+  corepack enable pnpm 2>/dev/null || true
 fi
+
+if ! command -v pnpm >/dev/null 2>&1 || ! pnpm --version 2>/dev/null | grep -q '^10\.'; then
+  echo "== installing pnpm@10"
+  npm install -g pnpm@10
+  hash -r 2>/dev/null || true
+fi
+pnpm --version
+
 echo "== web dependencies"
 (cd web && pnpm install --frozen-lockfile)
