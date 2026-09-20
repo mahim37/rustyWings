@@ -124,6 +124,28 @@ impl World {
         &self.plants
     }
 
+    /// Replace the configuration of a running world. This is what the UI's
+    /// live sliders call. The brain shape is rejected if it differs (it fixes
+    /// the genome length); a new grid resolution rebuilds the spatial hashes;
+    /// everything else takes effect from the next tick. The number of seed
+    /// patches is fixed at creation and ignored here.
+    pub fn set_config(&mut self, config: Config) -> Result<(), Error> {
+        config.validate()?;
+        if config.brain != self.config.brain {
+            return Err(Error::InvalidConfig {
+                field: "brain",
+                reason: "brain shape is fixed for the life of a world".into(),
+            });
+        }
+        if config.world.grid_cells != self.config.world.grid_cells {
+            let cells = config.world.grid_cells as usize;
+            self.agent_grid = Grid::new(cells);
+            self.plant_grid = Grid::new(cells);
+        }
+        self.config = config;
+        Ok(())
+    }
+
     /// Advance one tick.
     pub fn step(&mut self) {
         self.last = [TickCounters::default(); 2];
@@ -895,5 +917,31 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn set_config_swaps_parameters_and_rejects_brain_changes() {
+        let mut w = World::new(small(), 3).unwrap();
+        w.run(50);
+        let mut c = w.config().clone();
+        c.plants.regrowth *= 2.0;
+        c.world.grid_cells += 3;
+        w.set_config(c.clone()).unwrap();
+        assert_eq!(w.config(), &c);
+        w.run(50);
+        let mut bad = w.config().clone();
+        bad.brain.hidden += 1;
+        assert!(matches!(
+            w.set_config(bad),
+            Err(Error::InvalidConfig { field: "brain", .. })
+        ));
+        let mut invalid = w.config().clone();
+        invalid.plants.capacity = 0;
+        assert!(w.set_config(invalid).is_err());
+        assert_eq!(
+            w.config(),
+            &c,
+            "a rejected config leaves the world untouched"
+        );
     }
 }
