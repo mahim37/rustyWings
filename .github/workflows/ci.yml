@@ -20,10 +20,8 @@ jobs:
           components: clippy, rustfmt
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      # Formatting and lints are enforced on the rebuilt crates only. The legacy
-      # `libs/` crates still build and test but are slated for removal.
-      - run: cargo fmt -p rustywings-core -p rustywings-cli -p rustywings-wasm --check
-      - run: cargo clippy -p rustywings-core -p rustywings-cli -p rustywings-wasm --all-targets -- -D warnings
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       # The wasm-bindgen facade only compiles for wasm32; lint it there too.
       - run: cargo clippy -p rustywings-wasm --target wasm32-unknown-unknown -- -D warnings
