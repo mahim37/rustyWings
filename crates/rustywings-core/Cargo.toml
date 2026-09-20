@@ -1,0 +1,16 @@
+[package]
+name = "rustywings-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Deterministic, data-oriented artificial-life simulation: an open-ended co-evolving ecosystem of neural-network birds."
+license = "MIT"
+repository = "https://github.com/mahim37/rustyWings"
+
+[dependencies]
+libm = "0.2"
+postcard = { version = "1", features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+approx = "0.5"
