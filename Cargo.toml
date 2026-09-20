@@ -1,10 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = [
-    "libs/*",   # legacy shorelark-derived crates; removed once the new frontend ships
-    "crates/*", # rustywings-core, rustywings-cli, rustywings-wasm
-]
+members = ["crates/*"] # rustywings-core, rustywings-cli, rustywings-wasm
 
 [profile.release]
 opt-level = 3

@@ -130,7 +130,8 @@ export function lineChart(root: HTMLElement, opts: ChartOptions): void {
   svg.innerHTML = '';
   for (const tv of [yMax / 2, yMax]) {
     el('line', { x1: ml, x2: ml + pw, y1: Y(tv), y2: Y(tv), stroke: ink.grid, 'stroke-width': 1 }, svg);
-    el('text', { x: ml - 6, y: Y(tv) + 3.5, fill: ink.muted, 'font-size': 10, 'text-anchor': 'end', class: 'tn' }, svg).textContent = fmt(tv);
+    el('text', { x: ml - 6, y: Y(tv) + 3.5, fill: ink.muted, 'font-size': 10, 'text-anchor': 'end', class: 'tn' }, svg).textContent =
+      fmt(tv);
   }
   el('line', { x1: ml, x2: ml + pw, y1: Y(0), y2: Y(0), stroke: ink.axis, 'stroke-width': 1 }, svg);
   el('text', { x: ml - 6, y: Y(0) + 3.5, fill: ink.muted, 'font-size': 10, 'text-anchor': 'end', class: 'tn' }, svg).textContent = '0';
@@ -180,10 +181,12 @@ export function lineChart(root: HTMLElement, opts: ChartOptions): void {
   for (let i = 1; i < labels.length; i++) if (labels[i]!.y - labels[i - 1]!.y < 12) labels[i]!.y = labels[i - 1]!.y + 12;
   for (const L of labels) {
     const yEnd = Y(L.v);
-    if (Math.abs(L.y - yEnd) > 1) el('line', { x1: X(n - 1) + 5, y1: yEnd, x2: ml + pw + 7, y2: L.y, stroke: ink.axis, 'stroke-width': 1 }, svg);
+    if (Math.abs(L.y - yEnd) > 1)
+      el('line', { x1: X(n - 1) + 5, y1: yEnd, x2: ml + pw + 7, y2: L.y, stroke: ink.axis, 'stroke-width': 1 }, svg);
     el('text', { x: ml + pw + 9, y: L.y + 3.5, fill: ink.secondary, 'font-size': 11, class: 'tn' }, svg).textContent = fmt(L.v);
   }
-  for (const e of ends) el('circle', { cx: X(e.last!.i), cy: Y(e.last!.v), r: 4, fill: e.s.color, stroke: ink.surface, 'stroke-width': 2 }, svg);
+  for (const e of ends)
+    el('circle', { cx: X(e.last!.i), cy: Y(e.last!.v), r: 4, fill: e.s.color, stroke: ink.surface, 'stroke-width': 2 }, svg);
   const cross = el('line', { x1: 0, x2: 0, y1: mt, y2: mt + ph, stroke: ink.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
   const dots = series.map((s) => el('circle', { r: 4, fill: s.color, stroke: ink.surface, 'stroke-width': 2, visibility: 'hidden' }, svg));
   Object.assign(inst, { ml, pw, n });

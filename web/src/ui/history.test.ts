@@ -2,7 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { History, type Sample } from './history';
 
 function sample(tick: number, herb: number): Sample {
-  return { tick, herb, pred: 0, plants: 0, fovH: 0, fovP: 0, rangeH: 0, rangeP: 0, speedH: 0, speedP: 0, births: tick, deaths: 0, predated: 0 };
+  return {
+    tick,
+    herb,
+    pred: 0,
+    plants: 0,
+    fovH: 0,
+    fovP: 0,
+    rangeH: 0,
+    rangeP: 0,
+    speedH: 0,
+    speedP: 0,
+    births: tick,
+    deaths: 0,
+    predated: 0,
+  };
 }
 
 describe('History', () => {

@@ -17,6 +17,7 @@ use crate::brain::{Brain, Topology};
 use crate::config::Config;
 use crate::genome::Genome;
 use crate::grid::Grid;
+use crate::lineage::{COMPACT_ABOVE, COMPACT_EVERY, Cause, Family, Lineage};
 use crate::math::{Checksum, clamp, cos, sin, torus_delta, wrap_angle, wrap01};
 use crate::plants::Plants;
 use crate::retina::{CHANNELS, Retina};
@@ -50,6 +51,7 @@ pub struct World {
     topology: Topology,
     plants: Plants,
     agents: Agents,
+    lineage: Lineage,
     totals: [TickCounters; 2],
     last: [TickCounters; 2],
     /// When set, this world is a standardised test arena: nobody dies of
@@ -87,6 +89,7 @@ impl World {
             next_id: 1,
             topology,
             plants,
+            lineage: Lineage::default(),
             totals: Default::default(),
             last: Default::default(),
             arena_subject: None,
@@ -122,6 +125,10 @@ impl World {
     /// Living seeds.
     pub fn plants(&self) -> &Plants {
         &self.plants
+    }
+    /// Every bird ever born that is still reachable from a living one.
+    pub fn lineage(&self) -> &Lineage {
+        &self.lineage
     }
 
     /// Replace the configuration of a running world. This is what the UI's
@@ -169,6 +176,9 @@ impl World {
             self.totals[s].add(&self.last[s]);
         }
         self.tick += 1;
+        if self.tick % COMPACT_EVERY == 0 && self.lineage.len() > COMPACT_ABOVE {
+            self.lineage.compact(&self.agents.id);
+        }
     }
 
     /// Advance `ticks` ticks.
@@ -241,6 +251,8 @@ impl World {
         let id = self.next_id;
         self.next_id += 1;
         a.id = id;
+        self.lineage
+            .birth(id, a.parent, a.species, a.generation, self.tick);
         self.agents.push(a);
         id
     }
@@ -505,11 +517,21 @@ impl World {
                 continue;
             }
             let s = self.agents.species_of(i).index();
-            match d {
-                STARVED => self.last[s].deaths_starved += 1,
-                AGED => self.last[s].deaths_aged += 1,
-                _ => self.last[s].deaths_predated += 1,
-            }
+            let cause = match d {
+                STARVED => {
+                    self.last[s].deaths_starved += 1;
+                    Cause::Starved
+                }
+                AGED => {
+                    self.last[s].deaths_aged += 1;
+                    Cause::Aged
+                }
+                _ => {
+                    self.last[s].deaths_predated += 1;
+                    Cause::Predated
+                }
+            };
+            self.lineage.death(self.agents.id[i], self.tick, cause);
             self.agents.swap_remove(i);
         }
     }
@@ -609,6 +631,18 @@ impl World {
         self.agents.view(i)
     }
 
+    /// Ancestors, chicks and living descendants of the bird with `id`, alive
+    /// or dead, as long as the lineage log still has it. O(records + living).
+    pub fn family(&self, id: u64) -> Option<Family> {
+        self.lineage.family(id, &self.agents.id)
+    }
+
+    /// Ids of the living birds the map should highlight as relatives of
+    /// `id`: those sharing its grandparent, and its living ancestors.
+    pub fn relatives(&self, id: u64) -> Vec<u64> {
+        self.lineage.relatives(id, &self.agents.id)
+    }
+
     /// Index of the bird nearest `(x, y)` within `radius`, for click-to-select.
     pub fn agent_at(&self, x: f32, y: f32, radius: f32) -> Option<usize> {
         let r2 = radius * radius;
@@ -634,6 +668,8 @@ impl World {
             let dx = torus_delta(x, self.agents.x[i]);
             let dy = torus_delta(y, self.agents.y[i]);
             if dx * dx + dy * dy <= r2 {
+                self.lineage
+                    .death(self.agents.id[i], self.tick, Cause::Struck);
                 self.agents.swap_remove(i);
                 removed += 1;
             }
@@ -877,6 +913,51 @@ mod tests {
             a.generation.iter().any(|&g| g > 0),
             "someone should be second generation"
         );
+    }
+
+    #[test]
+    fn lineage_follows_births_deaths_and_strikes() {
+        let mut w = World::new(small(), 5).unwrap();
+        w.run(1500);
+        let a = w.agents();
+        let child = (0..a.len())
+            .find(|&i| a.generation[i] >= 2)
+            .expect("a grandchild should exist by tick 1500");
+        let id = a.id[child];
+        let parent = a.parent[child];
+        let f = w.family(id).expect("living birds are in the log");
+        assert_eq!(f.subject.id, id);
+        assert_eq!(f.ancestors.first().map(|r| r.id), Some(parent));
+        assert!(f.ancestors.len() >= 2, "chain reaches the founder");
+        assert!(f.ancestors.last().unwrap().generation == 0);
+        let founder = f.ancestors.last().unwrap().id;
+        let ff = w.family(founder).unwrap();
+        assert!(ff.living_descendants >= 1);
+        assert!(!ff.children.is_empty());
+        let kin = w.relatives(id);
+        assert!(kin.binary_search(&id).is_ok(), "a bird is its own relative");
+        let dead = w.lineage().records().iter().find(|r| r.died.is_some());
+        assert!(dead.is_some(), "someone died in 1500 ticks");
+        let (x, y) = (w.agents().x[child], w.agents().y[child]);
+        w.strike(x, y, 1e-4);
+        let r = w.lineage().get(id).unwrap();
+        assert_eq!(r.cause, Some(Cause::Struck));
+        assert_eq!(r.died, Some(1500));
+    }
+
+    #[test]
+    fn lineage_is_compacted_to_the_reachable_records() {
+        let mut w = World::new(small(), 6).unwrap();
+        w.run(COMPACT_EVERY * 2);
+        let n = w.agents().len();
+        let log = w.lineage();
+        assert!(log.len() >= n);
+        for &id in &w.agents().id {
+            assert!(log.get(id).is_some());
+        }
+        let bytes = w.to_snapshot();
+        let back = World::from_snapshot(&bytes).unwrap();
+        assert_eq!(back.lineage().records(), log.records());
     }
 
     #[test]

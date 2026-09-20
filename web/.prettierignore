@@ -1,0 +1,6 @@
+dist/
+src/wasm/
+pnpm-lock.yaml
+# Hand-laid-out; one rule per line reads better than prettier's expansion.
+src/style.css
+index.html

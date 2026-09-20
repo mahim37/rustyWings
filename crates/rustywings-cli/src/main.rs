@@ -3,11 +3,12 @@
 //! The same crate that runs in the browser runs here, natively and in
 //! parallel, which is what makes the CI checks meaningful: `verify` pins a
 //! checksum so any change to the simulation is deliberate, and `arena` proves
-//! that evolved brains beat random ones.
+//! that evolved brains beat random ones. `sweep` is how default parameters
+//! were chosen: a grid of variants across seeds, one summary row each.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
@@ -40,6 +41,9 @@ enum Cmd {
     /// The learning test: do evolved sparrows out-forage random ones in a
     /// standardised arena?
     Arena(ArenaArgs),
+    /// Run a grid of parameter variants across seeds and summarise each run
+    /// in one CSV row.
+    Sweep(SweepArgs),
     /// Print the default configuration as JSON.
     Config,
 }
@@ -53,7 +57,7 @@ enum Format {
 #[derive(clap::Args)]
 struct RunArgs {
     /// World seed.
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, conflicts_with = "resume")]
     seed: u64,
     /// Ticks to simulate.
     #[arg(long, default_value_t = 20_000)]
@@ -62,8 +66,12 @@ struct RunArgs {
     #[arg(long, default_value_t = 250)]
     every: u64,
     /// JSON config file (see `rustywings config`).
-    #[arg(long)]
+    #[arg(long, conflicts_with = "resume")]
     config: Option<PathBuf>,
+    /// Continue from a snapshot instead of starting a new world. The
+    /// browser's "Save world" button and `--snapshot` write these.
+    #[arg(long, value_name = "FILE")]
+    resume: Option<PathBuf>,
     /// Write stats here instead of stdout.
     #[arg(long)]
     out: Option<PathBuf>,
@@ -77,7 +85,7 @@ struct RunArgs {
 
 #[derive(clap::Args)]
 struct BenchArgs {
-    /// Total birds to start with (90% sparrows, 10% hawks).
+    /// Total birds to start with (95% sparrows, 5% hawks).
     #[arg(long, default_value_t = 5000)]
     agents: u32,
     /// Ticks to time.
@@ -89,15 +97,21 @@ struct BenchArgs {
 
 #[derive(clap::Args)]
 struct VerifyArgs {
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, conflicts_with = "resume")]
     seed: u64,
+    /// Ticks to simulate before printing the checksum. With `--resume`,
+    /// ticks beyond the snapshot; `0` prints the snapshot's own checksum,
+    /// which is what the browser showed when it was saved.
     #[arg(long, default_value_t = 2000)]
     ticks: u64,
     /// Expected checksum (hex). Exit 1 on mismatch.
     #[arg(long)]
     expect: Option<String>,
-    #[arg(long)]
+    #[arg(long, conflicts_with = "resume")]
     config: Option<PathBuf>,
+    /// Start from a snapshot instead of a fresh world.
+    #[arg(long, value_name = "FILE")]
+    resume: Option<PathBuf>,
 }
 
 #[derive(clap::Args)]
@@ -124,6 +138,31 @@ struct ArenaArgs {
     config: Option<PathBuf>,
 }
 
+#[derive(clap::Args)]
+struct SweepArgs {
+    /// Base config; the defaults when omitted.
+    #[arg(long)]
+    config: Option<PathBuf>,
+    /// A dotted field and the values to try, e.g. `plants.regrowth=6,12,24`.
+    /// Repeat for a grid: variants are the cartesian product.
+    #[arg(long = "set", value_name = "FIELD=V1,V2,...", required = true)]
+    sets: Vec<String>,
+    /// Seeds per variant; worlds use seed, seed+1, ...
+    #[arg(long, default_value_t = 2)]
+    seeds: u64,
+    #[arg(long, default_value_t = 1)]
+    seed: u64,
+    /// Ticks per run.
+    #[arg(long, default_value_t = 60_000)]
+    ticks: u64,
+    /// Sample stats every N ticks for the summary columns.
+    #[arg(long, default_value_t = 500)]
+    every: u64,
+    /// Write rows here instead of stdout.
+    #[arg(long)]
+    out: Option<PathBuf>,
+}
+
 fn load_config(path: &Option<PathBuf>) -> Result<Config> {
     let Some(path) = path else {
         return Ok(Config::default());
@@ -136,12 +175,27 @@ fn load_config(path: &Option<PathBuf>) -> Result<Config> {
     Ok(cfg)
 }
 
+fn load_snapshot(path: &Path) -> Result<World> {
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    World::from_snapshot(&bytes).with_context(|| format!("restoring {}", path.display()))
+}
+
+fn open_out(path: &Option<PathBuf>) -> Result<Box<dyn Write>> {
+    Ok(match path {
+        Some(p) => Box::new(BufWriter::new(
+            File::create(p).with_context(|| format!("creating {}", p.display()))?,
+        )),
+        None => Box::new(BufWriter::new(std::io::stdout().lock())),
+    })
+}
+
 fn main() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Run(a) => run(a),
         Cmd::Bench(a) => bench(a),
         Cmd::Verify(a) => verify(a),
         Cmd::Arena(a) => arena(a),
+        Cmd::Sweep(a) => sweep(a),
         Cmd::Config => {
             println!("{}", serde_json::to_string_pretty(&Config::default())?);
             Ok(())
@@ -190,14 +244,11 @@ fn csv_row(s: &Stats) -> String {
 }
 
 fn run(a: RunArgs) -> Result<()> {
-    let cfg = load_config(&a.config)?;
-    let mut world = World::new(cfg, a.seed)?;
-    let mut out: Box<dyn Write> = match &a.out {
-        Some(p) => Box::new(BufWriter::new(
-            File::create(p).with_context(|| format!("creating {}", p.display()))?,
-        )),
-        None => Box::new(BufWriter::new(std::io::stdout().lock())),
+    let mut world = match &a.resume {
+        Some(p) => load_snapshot(p)?,
+        None => World::new(load_config(&a.config)?, a.seed)?,
     };
+    let mut out = open_out(&a.out)?;
     let started = Instant::now();
     let emit = |out: &mut dyn Write, w: &World| -> Result<()> {
         let s = w.stats();
@@ -222,8 +273,9 @@ fn run(a: RunArgs) -> Result<()> {
     out.flush()?;
     let s = world.stats();
     eprintln!(
-        "seed {} · {} ticks in {:.1}s · herbivores {} · predators {} · plants {} · checksum {:016x}",
-        a.seed,
+        "seed {:x} · tick {} · {} ticks in {:.1}s · herbivores {} · predators {} · plants {} · checksum {:016x}",
+        world.seed(),
+        world.tick(),
         a.ticks,
         started.elapsed().as_secs_f32(),
         s.species[0].count,
@@ -275,8 +327,10 @@ fn bench(a: BenchArgs) -> Result<()> {
 }
 
 fn verify(a: VerifyArgs) -> Result<()> {
-    let cfg = load_config(&a.config)?;
-    let mut world = World::new(cfg, a.seed)?;
+    let mut world = match &a.resume {
+        Some(p) => load_snapshot(p)?,
+        None => World::new(load_config(&a.config)?, a.seed)?,
+    };
     world.run(a.ticks);
     let sum = world.checksum();
     println!("{sum:016x}");
@@ -286,7 +340,11 @@ fn verify(a: VerifyArgs) -> Result<()> {
         if want != sum {
             bail!("checksum mismatch: expected {want:016x}, got {sum:016x}");
         }
-        eprintln!("ok: seed {} · {} ticks · checksum matches", a.seed, a.ticks);
+        eprintln!(
+            "ok: seed {:x} · tick {} · checksum matches",
+            world.seed(),
+            world.tick()
+        );
     }
     Ok(())
 }
@@ -359,4 +417,264 @@ fn arena(a: ArenaArgs) -> Result<()> {
     }
     println!("ok: evolved sparrows out-forage random ones");
     Ok(())
+}
+
+// ----- sweep ------------------------------------------------------------
+
+/// One `--set`: a dotted field and the values to try.
+struct Axis {
+    field: String,
+    values: Vec<serde_json::Value>,
+}
+
+fn parse_axis(text: &str) -> Result<Axis> {
+    let (field, values) = text
+        .split_once('=')
+        .with_context(|| format!("--set {text:?}: expected FIELD=V1,V2,..."))?;
+    let values = values
+        .split(',')
+        .map(|v| {
+            let v = v.trim();
+            serde_json::from_str(v).unwrap_or_else(|_| serde_json::Value::String(v.to_owned()))
+        })
+        .collect::<Vec<_>>();
+    if values.is_empty() || field.trim().is_empty() {
+        bail!("--set {text:?}: expected FIELD=V1,V2,...");
+    }
+    Ok(Axis {
+        field: field.trim().to_owned(),
+        values,
+    })
+}
+
+/// Apply one `field=value` to a JSON config, insisting that the field exists
+/// so a typo is an error rather than a silently unchanged run.
+fn set_field(cfg: &mut serde_json::Value, field: &str, value: &serde_json::Value) -> Result<()> {
+    let pointer = format!("/{}", field.replace('.', "/"));
+    let slot = cfg
+        .pointer_mut(&pointer)
+        .with_context(|| format!("no such config field `{field}`"))?;
+    *slot = value.clone();
+    Ok(())
+}
+
+/// Every combination of axis values, as index vectors, first axis slowest.
+fn grid(axes: &[Axis]) -> Vec<Vec<usize>> {
+    let mut out = vec![Vec::new()];
+    for axis in axes {
+        out = out
+            .into_iter()
+            .flat_map(|prefix| {
+                (0..axis.values.len()).map(move |i| {
+                    let mut v = prefix.clone();
+                    v.push(i);
+                    v
+                })
+            })
+            .collect();
+    }
+    out
+}
+
+struct SweepRow {
+    variant: usize,
+    seed: u64,
+    end: Stats,
+    herb_mean: f64,
+    pred_mean: f64,
+    plants_mean: f64,
+    herb_min: u32,
+    pred_min: u32,
+    herb_extinct: Option<u64>,
+    pred_extinct: Option<u64>,
+    checksum: u64,
+    seconds: f32,
+}
+
+fn sweep_one(cfg: Config, seed: u64, ticks: u64, every: u64) -> Result<(Stats, SweepRow)> {
+    let started = Instant::now();
+    let mut world = World::new(cfg, seed)?;
+    let every = every.max(1);
+    let half = ticks / 2;
+    let (mut sum_h, mut sum_p, mut sum_s, mut n) = (0f64, 0f64, 0f64, 0u32);
+    let (mut min_h, mut min_p) = (u32::MAX, u32::MAX);
+    let (mut ext_h, mut ext_p) = (None, None);
+    let mut done = 0;
+    while done < ticks {
+        let step = every.min(ticks - done);
+        world.run(step);
+        done += step;
+        let s = world.stats();
+        let (h, p) = (s.species[0].count, s.species[1].count);
+        if h == 0 && ext_h.is_none() {
+            ext_h = Some(s.tick);
+        }
+        if p == 0 && ext_p.is_none() {
+            ext_p = Some(s.tick);
+        }
+        if done > half {
+            sum_h += f64::from(h);
+            sum_p += f64::from(p);
+            sum_s += f64::from(s.plants);
+            n += 1;
+            min_h = min_h.min(h);
+            min_p = min_p.min(p);
+        }
+    }
+    let end = world.stats();
+    let n = f64::from(n.max(1));
+    let row = SweepRow {
+        variant: 0,
+        seed,
+        end: end.clone(),
+        herb_mean: sum_h / n,
+        pred_mean: sum_p / n,
+        plants_mean: sum_s / n,
+        herb_min: min_h,
+        pred_min: min_p,
+        herb_extinct: ext_h,
+        pred_extinct: ext_p,
+        checksum: world.checksum(),
+        seconds: started.elapsed().as_secs_f32(),
+    };
+    Ok((end, row))
+}
+
+fn sweep(a: SweepArgs) -> Result<()> {
+    let base = serde_json::to_value(load_config(&a.config)?)?;
+    let axes = a
+        .sets
+        .iter()
+        .map(|s| parse_axis(s))
+        .collect::<Result<Vec<_>>>()?;
+    let combos = grid(&axes);
+    let mut variants = Vec::with_capacity(combos.len());
+    for combo in &combos {
+        let mut json = base.clone();
+        for (axis, &i) in axes.iter().zip(combo) {
+            set_field(&mut json, &axis.field, &axis.values[i])?;
+        }
+        let cfg: Config = serde_json::from_value(json).context("building variant")?;
+        cfg.validate()?;
+        variants.push(cfg);
+    }
+    let jobs: Vec<(usize, u64)> = (0..variants.len())
+        .flat_map(|v| (0..a.seeds).map(move |k| (v, a.seed + k)))
+        .collect();
+    eprintln!(
+        "{} variants × {} seeds × {} ticks on {} threads",
+        variants.len(),
+        a.seeds,
+        a.ticks,
+        rayon::current_num_threads()
+    );
+    let started = Instant::now();
+    let rows: Vec<Result<SweepRow>> = jobs
+        .par_iter()
+        .map(|&(v, seed)| {
+            let (_, mut row) = sweep_one(variants[v].clone(), seed, a.ticks, a.every)?;
+            row.variant = v;
+            eprintln!(
+                "variant {v} seed {seed}: sparrows {} hawks {} seeds {} · {:.1}s",
+                row.end.species[0].count, row.end.species[1].count, row.end.plants, row.seconds
+            );
+            Ok(row)
+        })
+        .collect();
+
+    let mut out = open_out(&a.out)?;
+    let fields: Vec<String> = axes.iter().map(|x| x.field.replace('.', "_")).collect();
+    writeln!(
+        out,
+        "variant,{},seed,ticks,herb_end,pred_end,plants_end,herb_mean,pred_mean,plants_mean,herb_min,pred_min,herb_immigrants,pred_immigrants,herb_extinct_tick,pred_extinct_tick,herb_fov_deg,pred_fov_deg,checksum,seconds",
+        fields.join(",")
+    )?;
+    let opt = |t: Option<u64>| t.map_or(String::new(), |t| t.to_string());
+    for r in rows {
+        let r = r?;
+        let values: Vec<String> = axes
+            .iter()
+            .zip(&combos[r.variant])
+            .map(|(axis, &i)| axis.values[i].to_string().replace('"', ""))
+            .collect();
+        let e = &r.end;
+        writeln!(
+            out,
+            "{},{},{},{},{},{},{},{:.1},{:.1},{:.1},{},{},{},{},{},{},{:.1},{:.1},{:016x},{:.1}",
+            r.variant,
+            values.join(","),
+            r.seed,
+            a.ticks,
+            e.species[0].count,
+            e.species[1].count,
+            e.plants,
+            r.herb_mean,
+            r.pred_mean,
+            r.plants_mean,
+            r.herb_min,
+            r.pred_min,
+            e.totals[0].immigrants,
+            e.totals[1].immigrants,
+            opt(r.herb_extinct),
+            opt(r.pred_extinct),
+            e.species[0].mean_fov_angle.to_degrees(),
+            e.species[1].mean_fov_angle.to_degrees(),
+            r.checksum,
+            r.seconds,
+        )?;
+    }
+    out.flush()?;
+    eprintln!("done in {:.1}s", started.elapsed().as_secs_f32());
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn axes_parse_numbers_and_strings() {
+        let a = parse_axis("plants.regrowth=6, 12,24").unwrap();
+        assert_eq!(a.field, "plants.regrowth");
+        let want: Vec<serde_json::Value> = vec![6.into(), 12.into(), 24.into()];
+        assert_eq!(a.values, want);
+        assert!(parse_axis("plants.regrowth").is_err());
+        assert!(parse_axis("=1").is_err());
+    }
+
+    #[test]
+    fn grid_is_the_cartesian_product() {
+        let axes = vec![parse_axis("a=1,2").unwrap(), parse_axis("b=x,y,z").unwrap()];
+        let g = grid(&axes);
+        assert_eq!(g.len(), 6);
+        assert_eq!(g[0], vec![0, 0]);
+        assert_eq!(g[1], vec![0, 1]);
+        assert_eq!(g[5], vec![1, 2]);
+        assert_eq!(grid(&[]), vec![Vec::<usize>::new()]);
+    }
+
+    #[test]
+    fn set_field_rejects_unknown_paths_and_the_config_validates_values() {
+        let mut json = serde_json::to_value(Config::default()).unwrap();
+        set_field(&mut json, "plants.regrowth", &24.into()).unwrap();
+        let cfg: Config = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(cfg.plants.regrowth, 24.0);
+        assert!(set_field(&mut json, "plants.regrowt", &1.into()).is_err());
+        set_field(&mut json, "plants.capacity", &0.into()).unwrap();
+        let cfg: Config = serde_json::from_value(json).unwrap();
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn sweep_summary_covers_the_second_half() {
+        let mut cfg = Config::default();
+        cfg.world.initial_herbivores = 80;
+        cfg.world.initial_predators = 8;
+        cfg.plants.initial = 300;
+        let (end, row) = sweep_one(cfg, 3, 400, 100).unwrap();
+        assert_eq!(end.tick, 400);
+        assert!(row.herb_mean > 0.0);
+        assert!(row.herb_min <= end.species[0].count.max(row.herb_min));
+        assert_eq!(row.seed, 3);
+    }
 }

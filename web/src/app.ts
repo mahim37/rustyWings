@@ -1,19 +1,20 @@
 /**
  * Wires the page together: worker client, renderer, charts, inspector,
- * settings, URL state and keyboard. No framework; the DOM is the state
- * for things the DOM already knows, and this class holds the rest.
+ * settings, files, theme, URL state and input. No framework; the DOM is the
+ * state for things the DOM already knows, and this class holds the rest.
  */
 
 import { Renderer } from './render/renderer';
 import { SimClient } from './sim/client';
 import { BASE_UPS, type EventKind } from './sim/protocol';
-import type { Config, Inspection, Shape } from './sim/types';
+import type { Config, Family, Inspection, Shape } from './sim/types';
 import { lineChart, renderTable, type Ink } from './ui/charts';
 import { clamp, fmtInt, ticksAgo } from './ui/format';
 import { History, toSample } from './ui/history';
 import { describe, Inspector } from './ui/inspector';
 import { updateKpis } from './ui/kpis';
 import { Settings } from './ui/settings';
+import { applyTheme, cssColor, readTheme, THEME_KEY, THEMES } from './ui/theme';
 import { toast } from './ui/toast';
 import { applyPatch, buildUrl, parseUrl, randomSeed } from './url';
 
@@ -28,15 +29,19 @@ const POINTS = 160;
 const METEOR_RADIUS = 0.06;
 const SCATTER_SEEDS = 400;
 const PICK_RADIUS_PX = 14;
-
-const INK: Ink = { primary: '#0b0b0b', secondary: '#52514e', muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7', surface: '#fcfcfb' };
-const COLOR = { herb: '#2a78d6', pred: '#eb6834', plant: '#1baf7a' };
+/** Extension of a saved world; the CLI's `--resume` reads the same bytes. */
+const WORLD_EXT = '.world';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const e = document.getElementById(id);
   if (!e) throw new Error(`missing #${id}`);
   return e as T;
 };
+
+interface Pointer {
+  x: number;
+  y: number;
+}
 
 export class App {
   private readonly client = new SimClient();
@@ -57,10 +62,13 @@ export class App {
   private follow = false;
   private showVision = false;
   private showPatches = true;
+  private showTrail = true;
   private meteorArmed = false;
   private tableOpen = false;
   private selectedId = -1;
   private inspection: Inspection | null = null;
+  private family: Family | null = null;
+  private relatives = 0;
   private checksum = '';
   /** True while the first world is being built from settings in the URL. */
   private pendingPatch = false;
@@ -68,14 +76,22 @@ export class App {
   private lastSecond = performance.now();
   private lastChartAt = 0;
   private chartsDirty = true;
+  private ink: Ink = { primary: '#0b0b0b', secondary: '#52514e', muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7', surface: '#fcfcfb' };
+  private color = { herb: '#2a78d6', pred: '#eb6834', plant: '#1baf7a' };
   private readonly canvas = $<HTMLCanvasElement>('world');
+  private readonly darkMedia = matchMedia('(prefers-color-scheme: dark)');
 
   constructor() {
     this.renderer = new Renderer(this.canvas);
-    this.inspector = new Inspector(() => this.config ?? this.defaults!);
+    this.inspector = new Inspector(
+      () => this.config ?? this.defaults!,
+      (id) => this.client.selectId(id),
+    );
     this.bindWorker();
     this.bindStage();
     this.bindControls();
+    this.bindFiles();
+    this.bindTheme();
     this.bindKeys();
   }
 
@@ -107,6 +123,7 @@ export class App {
     this.client.on('ready', (m) => {
       this.pendingPatch = false;
       this.seed = m.seed;
+      this.tick = m.tick;
       this.config = m.config;
       this.shape = m.shape;
       this.version = m.version;
@@ -115,6 +132,7 @@ export class App {
       this.inspector.clear();
       this.selectedId = -1;
       this.inspection = null;
+      this.family = null;
       this.follow = false;
       this.chartsDirty = true;
       $('seed-text').textContent = 'seed ' + m.seed;
@@ -124,6 +142,7 @@ export class App {
       this.client.speed(SPEEDS[this.speedIdx]!.ups);
       this.client.play(this.playing);
       $('stage-error').style.display = 'none';
+      if (m.tick > 0) toast(`Opened a world at tick ${fmtInt(m.tick)}`);
     });
     this.client.on('frame', (m) => {
       this.tick = m.tick;
@@ -139,6 +158,11 @@ export class App {
         }
         this.inspection = m.inspection;
       }
+      if (m.family !== undefined) {
+        this.family = m.family;
+        this.relatives = m.relatives ?? 0;
+      }
+      if (m.selectedId !== this.selectedId) this.family = null;
       this.selectedId = m.selectedId;
       if (this.selectedId < 0) this.inspection = null;
       this.renderer.upload(new Float32Array(m.buffer, 0, m.length));
@@ -150,6 +174,7 @@ export class App {
       this.inspector.clear();
       this.selectedId = -1;
       this.inspection = null;
+      this.family = null;
       this.chartsDirty = true;
     });
     this.client.on('genome', (m) => {
@@ -170,8 +195,13 @@ export class App {
         traits: a.traits,
         weights: a.weights,
       };
-      download(name + '.json', JSON.stringify(body, null, 2));
+      download(name + '.json', new Blob([JSON.stringify(body, null, 2)], { type: 'application/json' }));
       toast('Saved ' + name + '.json');
+    });
+    this.client.on('export', (m) => {
+      const name = `rustywings-${m.seed}-t${m.tick}${WORLD_EXT}`;
+      download(name, new Blob([m.bytes], { type: 'application/octet-stream' }));
+      toast(`Saved ${name} · open it here later, or run it with \`rustywings run --resume\``, 5000);
     });
     this.client.on('error', (m) => {
       if (m.fatal && this.pendingPatch && this.defaults) {
@@ -202,6 +232,9 @@ export class App {
       case 'spawn':
         toast(`${fmtInt(detail)} birds released`);
         break;
+      case 'introduce':
+        toast(`Released bird #${detail} from the file; it is selected`);
+        break;
       case 'snapshot':
         toast(`Snapshot saved at tick ${fmtInt(detail)}`);
         break;
@@ -222,11 +255,12 @@ export class App {
     this.renderer.draw({
       showVision: this.showVision,
       showPatches: this.showPatches,
+      showTrail: this.showTrail,
       patchRadius: this.config?.plants.patch_radius ?? 0.05,
     });
     this.hud();
     this.callout();
-    if (this.inspection && this.shape) this.inspector.update(this.inspection, this.tick, this.shape);
+    if (this.inspection && this.shape) this.inspector.update(this.inspection, this.tick, this.shape, this.family, this.relatives);
     else if (this.selectedId < 0) this.inspector.clear();
     if (this.chartsDirty && now - this.lastChartAt > 160) {
       updateKpis(this.history);
@@ -299,29 +333,31 @@ export class App {
     const plants = this.history.window('plants', w, POINTS).values;
     const fovH = this.history.window('fovH', w, POINTS).values;
     const fovP = this.history.window('fovP', w, POINTS).values;
-    const mini = { ink: INK, group: 'pop', height: 68, xAxis: false, ml: 40, xLabel, area: true };
-    lineChart($('c-herb'), { ...mini, series: [{ name: 'Sparrows', color: COLOR.herb, values: herb }] });
-    lineChart($('c-pred'), { ...mini, series: [{ name: 'Hawks', color: COLOR.pred, values: pred }] });
-    lineChart($('c-plants'), { ...mini, height: 82, xAxis: true, series: [{ name: 'Seeds', color: COLOR.plant, values: plants }] });
+    const ink = this.ink;
+    const color = this.color;
+    const mini = { ink, group: 'pop', height: 68, xAxis: false, ml: 40, xLabel, area: true };
+    lineChart($('c-herb'), { ...mini, series: [{ name: 'Sparrows', color: color.herb, values: herb }] });
+    lineChart($('c-pred'), { ...mini, series: [{ name: 'Hawks', color: color.pred, values: pred }] });
+    lineChart($('c-plants'), { ...mini, height: 82, xAxis: true, series: [{ name: 'Seeds', color: color.plant, values: plants }] });
     lineChart($('c-fov'), {
-      ink: INK,
+      ink,
       height: 118,
       ml: 40,
       xLabel,
       yFormat: (v) => Math.round(v) + '°',
       legendEl: $('lg-fov'),
       series: [
-        { name: 'Sparrows', color: COLOR.herb, values: fovH },
-        { name: 'Hawks', color: COLOR.pred, values: fovP },
+        { name: 'Sparrows', color: color.herb, values: fovH },
+        { name: 'Hawks', color: color.pred, values: fovP },
       ],
     });
     if (this.tableOpen) {
       renderTable(
         $<HTMLTableElement>('tv'),
         [
-          { name: 'Sparrows', color: COLOR.herb, values: herb },
-          { name: 'Hawks', color: COLOR.pred, values: pred },
-          { name: 'Seeds', color: COLOR.plant, values: plants },
+          { name: 'Sparrows', color: color.herb, values: herb },
+          { name: 'Hawks', color: color.pred, values: pred },
+          { name: 'Seeds', color: color.plant, values: plants },
         ],
         xLabel,
         8,
@@ -357,45 +393,79 @@ export class App {
     new ResizeObserver(fit).observe(stage);
     fit();
 
-    let down: { x: number; y: number; cx: number; cy: number; moved: boolean } | null = null;
+    // One finger (or the mouse) drags to pan and taps to select; two fingers
+    // pinch to zoom about their midpoint while their midpoint pans.
+    const pointers = new Map<number, Pointer>();
+    let press: Pointer | null = null;
+    let moved = false;
+    let pinch: { dist: number; mid: Pointer } | null = null;
+    const local = (e: PointerEvent): Pointer => {
+      const r = this.canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const pinchState = (): { dist: number; mid: Pointer } => {
+      const [a, b] = [...pointers.values()] as [Pointer, Pointer];
+      return { dist: Math.hypot(b.x - a.x, b.y - a.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+    };
     this.canvas.addEventListener('pointerdown', (e) => {
       this.canvas.setPointerCapture(e.pointerId);
-      down = { x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, moved: false };
+      pointers.set(e.pointerId, local(e));
+      if (pointers.size === 1) {
+        press = local(e);
+        moved = false;
+        pinch = null;
+      } else if (pointers.size === 2) {
+        pinch = pinchState();
+        moved = true;
+      }
     });
     this.canvas.addEventListener('pointermove', (e) => {
-      if (!down) return;
-      const dx = e.clientX - down.cx;
-      const dy = e.clientY - down.cy;
-      if (Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y) > 4) down.moved = true;
-      if (down.moved) {
-        this.renderer.camera.panByPixels(dx, dy);
+      if (!pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId)!;
+      const cur = local(e);
+      pointers.set(e.pointerId, cur);
+      if (pointers.size >= 2 && pinch) {
+        const next = pinchState();
+        if (pinch.dist > 0) this.renderer.camera.zoomAt(next.dist / pinch.dist, next.mid.x, next.mid.y);
+        this.renderer.camera.panByPixels(next.mid.x - pinch.mid.x, next.mid.y - pinch.mid.y);
+        pinch = next;
+        this.follow = false;
+        return;
+      }
+      if (!press) return;
+      if (Math.abs(cur.x - press.x) + Math.abs(cur.y - press.y) > 4) moved = true;
+      if (moved) {
+        this.renderer.camera.panByPixels(cur.x - prev.x, cur.y - prev.y);
         this.follow = false;
       }
-      down.cx = e.clientX;
-      down.cy = e.clientY;
     });
-    this.canvas.addEventListener('pointerup', (e) => {
-      if (!down) return;
-      const wasClick = !down.moved;
-      down = null;
-      if (!wasClick) return;
-      const r = this.canvas.getBoundingClientRect();
-      const [wx, wy] = this.renderer.camera.screenToWorld(e.clientX - r.left, e.clientY - r.top);
+    const release = (e: PointerEvent, click: boolean): void => {
+      pointers.delete(e.pointerId);
+      if (pointers.size === 1) pinch = null;
+      if (pointers.size > 0) return;
+      const tap = click && press && !moved;
+      press = null;
+      if (!tap) return;
+      const p = local(e);
+      const [wx, wy] = this.renderer.camera.screenToWorld(p.x, p.y);
       if (this.meteorArmed) {
         this.armMeteor(false);
         this.client.strike(wx, wy, METEOR_RADIUS);
       } else {
         this.client.select(wx, wy, PICK_RADIUS_PX * this.renderer.camera.unitsPerPixel);
       }
-    });
-    this.canvas.addEventListener('pointercancel', () => (down = null));
+    };
+    this.canvas.addEventListener('pointerup', (e) => release(e, true));
+    this.canvas.addEventListener('pointercancel', (e) => release(e, false));
     this.canvas.addEventListener(
       'wheel',
       (e) => {
         e.preventDefault();
+        const p = { x: e.clientX, y: e.clientY };
         const r = this.canvas.getBoundingClientRect();
-        const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016));
-        this.renderer.camera.zoomAt(factor, e.clientX - r.left, e.clientY - r.top);
+        // Trackpad pinches arrive as ctrl+wheel with small deltas.
+        const k = e.ctrlKey ? 0.01 : e.deltaMode === 1 ? 0.05 : 0.0016;
+        this.renderer.camera.zoomAt(Math.exp(-e.deltaY * k), p.x - r.left, p.y - r.top);
       },
       { passive: false },
     );
@@ -470,15 +540,122 @@ export class App {
     $('reset-settings').addEventListener('click', () => this.settings?.reset());
     $('copy-config').addEventListener('click', () => {
       if (!this.config) return;
-      void copy(JSON.stringify(this.config, null, 2)).then(() => toast('Config copied · save it as a file for `rustywings run --config`', 4000));
+      void copy(JSON.stringify(this.config, null, 2)).then(() =>
+        toast('Config copied · save it as a file for `rustywings run --config`', 4000),
+      );
     });
     document.querySelectorAll<HTMLElement>('.sw[data-t]').forEach((sw) => {
-      sw.addEventListener('click', () => {
-        const on = sw.classList.toggle('on');
-        if (sw.dataset['t'] === 'vision') this.showVision = on;
-        if (sw.dataset['t'] === 'patches') this.showPatches = on;
-      });
+      sw.addEventListener('click', () => this.toggleSwitch(sw));
     });
+  }
+
+  private toggleSwitch(sw: HTMLElement): void {
+    const on = sw.classList.toggle('on');
+    sw.setAttribute('aria-checked', String(on));
+    const name = sw.dataset['t'];
+    if (name === 'vision') this.showVision = on;
+    else if (name === 'patches') this.showPatches = on;
+    else if (name === 'trail') this.showTrail = on;
+  }
+
+  private toggle(name: string): void {
+    document.querySelector<HTMLElement>(`.sw[data-t="${name}"]`)?.click();
+  }
+
+  // ----- files ----------------------------------------------------------
+
+  private bindFiles(): void {
+    const input = $<HTMLInputElement>('file-in');
+    $('save-world').addEventListener('click', () => this.client.export());
+    $('open-world').addEventListener('click', () => {
+      input.accept = WORLD_EXT;
+      input.click();
+    });
+    $('release').addEventListener('click', () => {
+      input.accept = '.json';
+      input.click();
+    });
+    input.addEventListener('change', () => {
+      const f = input.files?.[0];
+      input.value = '';
+      if (f) void this.openFile(f);
+    });
+    // Dropping a file anywhere on the stage opens it.
+    const stage = $('stage');
+    stage.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      stage.classList.add('drop');
+    });
+    stage.addEventListener('dragleave', () => stage.classList.remove('drop'));
+    stage.addEventListener('drop', (e) => {
+      e.preventDefault();
+      stage.classList.remove('drop');
+      const f = e.dataTransfer?.files[0];
+      if (f) void this.openFile(f);
+    });
+  }
+
+  /** A `.world` file replaces the world; a genome `.json` releases a bird. */
+  private async openFile(f: File): Promise<void> {
+    if (f.name.endsWith(WORLD_EXT)) {
+      this.client.restore(await f.arrayBuffer());
+      return;
+    }
+    if (f.name.endsWith('.json')) {
+      const text = await f.text();
+      let species: 0 | 1;
+      try {
+        const g = JSON.parse(text) as { format?: string; species?: string };
+        if (g.format !== 'rustywings-genome') throw new Error('not a genome');
+        species = g.species === 'Predator' ? 1 : 0;
+      } catch {
+        toast(`${f.name} is not a saved genome`);
+        return;
+      }
+      this.client.introduce(species, text);
+      return;
+    }
+    toast(`Drop a ${WORLD_EXT} file to open a world, or a saved genome .json to release a bird`, 4000);
+  }
+
+  // ----- theme ----------------------------------------------------------
+
+  private bindTheme(): void {
+    const box = $('theme');
+    box.innerHTML = '';
+    for (const t of THEMES) {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = t.label;
+      b.dataset['choice'] = t.choice;
+      b.addEventListener('click', () => {
+        localStorage.setItem(THEME_KEY, t.choice);
+        this.syncTheme();
+      });
+      box.appendChild(b);
+    }
+    this.darkMedia.addEventListener('change', () => this.syncTheme());
+    this.syncTheme();
+  }
+
+  /** Apply the stored theme choice and re-read every colour the canvas and charts use. */
+  private syncTheme(): void {
+    const choice = readTheme();
+    $('theme')
+      .querySelectorAll<HTMLElement>('.btn')
+      .forEach((b) => b.classList.toggle('on', b.dataset['choice'] === choice));
+    applyTheme(choice, this.darkMedia.matches);
+    this.ink = {
+      primary: cssColor('--ink'),
+      secondary: cssColor('--ink-2'),
+      muted: cssColor('--ink-3'),
+      grid: cssColor('--grid'),
+      axis: cssColor('--axis'),
+      surface: cssColor('--surface'),
+    };
+    this.color = { herb: cssColor('--herb'), pred: cssColor('--pred'), plant: cssColor('--plant') };
+    this.renderer.setTheme({ field: cssColor('--field'), ink: cssColor('--ink') });
+    this.chartsDirty = true;
   }
 
   private applyConfig(c: Config): void {
@@ -578,6 +755,7 @@ export class App {
     document.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const help = $<HTMLDialogElement>('help');
       if (help.open && e.key !== 'Escape' && e.key !== '?') return;
       switch (e.key) {
@@ -603,11 +781,13 @@ export class App {
           this.client.selectRandom();
           break;
         case 'v':
-        case 'V': {
-          const sw = document.querySelector<HTMLElement>('.sw[data-t="vision"]');
-          sw?.click();
+        case 'V':
+          this.toggle('vision');
           break;
-        }
+        case 't':
+        case 'T':
+          this.toggle('trail');
+          break;
         case 'm':
         case 'M':
           this.armMeteor(!this.meteorArmed);
@@ -639,8 +819,7 @@ async function copy(text: string): Promise<void> {
   throw new Error('clipboard unavailable');
 }
 
-function download(name: string, text: string): void {
-  const blob = new Blob([text], { type: 'application/json' });
+function download(name: string, blob: Blob): void {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;

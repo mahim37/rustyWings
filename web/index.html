@@ -5,10 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>rustyWings · a tiny evolving world</title>
 <meta name="description" content="An open-ended ecosystem of neural-network birds. Sparrows eat seeds, hawks eat sparrows, and every brain is inherited, mutated and kept only if it worked. Rust, WebAssembly, WebGL2.">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta property="og:title" content="rustyWings · a tiny evolving world">
 <meta property="og:description" content="Sparrows eat seeds. Hawks eat sparrows. Nobody is programmed to do anything.">
+<script>
+  // Apply the stored theme before the first paint so a dark page never flashes light.
+  (function () {
+    var t = localStorage.getItem('rustywings.theme');
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 </head>
 <body>
 <header class="top">
@@ -21,12 +29,17 @@
     <button class="btn on" id="play" title="Pause / play (Space)">⏸</button>
     <button class="btn" id="stepbtn" title="Step one tick (.)">⏭</button>
     <div class="seg" id="speed" role="group" aria-label="speed"></div>
-    <button class="btn" id="snapshot" title="Save a snapshot of this moment">Snapshot</button>
+    <button class="btn" id="snapshot" title="Remember this moment; Rewind returns to it">Snapshot</button>
     <button class="btn" id="seeds" title="Scatter 400 seeds (S)">Scatter seeds</button>
     <button class="btn" id="meteor" title="Drop a meteor where you click next (M)">Meteor</button>
-    <button class="btn" id="share" title="Copy a link that replays this world">Share this world</button>
+    <div class="seg">
+      <button class="btn" id="save-world" title="Download this world as a file. Open it here later, or continue it with the command-line tool.">Save world</button>
+      <button class="btn" id="open-world" title="Open a saved .world file (or drop one on the map)">Open</button>
+    </div>
+    <button class="btn" id="share" title="Copy a link that replays this world from tick 0">Share</button>
     <button class="btn icon" id="help-btn" title="Help (?)">?</button>
   </div>
+  <input type="file" id="file-in" hidden>
 </header>
 
 <main class="stage" id="stage">
@@ -38,7 +51,8 @@
   </div>
   <div class="callout" id="callout" style="display:none"></div>
   <div class="welcome" id="welcome"><button class="x" id="wx" aria-label="dismiss">✕</button><b>Sparrows eat seeds. Hawks eat sparrows.</b> Nobody is programmed to do anything. Every bird's brain is inherited, mutated, and kept only if it worked. Click any bird to meet it.</div>
-  <div class="hint">click a bird · drag to pan · wheel to zoom · double-click to reset</div>
+  <div class="hint">click a bird · drag to pan · wheel or pinch to zoom · double-click to reset</div>
+  <div class="drop-hint">Drop a .world file to open it, or a saved genome to release that bird</div>
   <div class="stage-error" id="stage-error" style="display:none" role="alert"></div>
 </main>
 
@@ -67,8 +81,8 @@
     <div class="legend" id="lg-fov"></div>
     <div class="chart" id="c-fov"></div>
     <div class="eyes">
-      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-h" d="" fill="#2a78d6" opacity=".18"/><circle r="4" fill="#2a78d6"/></svg><span>Sparrows see <b id="e-h">—</b> around them</span></div>
-      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-p" d="" fill="#eb6834" opacity=".18"/><circle r="4" fill="#eb6834"/></svg><span>Hawks focus <b id="e-p">—</b> ahead</span></div>
+      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-h" d="" fill="var(--herb)" opacity=".18"/><circle r="4" fill="var(--herb)"/></svg><span>Sparrows see <b id="e-h">—</b> around them</span></div>
+      <div class="eye"><svg width="32" height="32" viewBox="-16 -16 32 32" aria-hidden="true"><path id="eye-p" d="" fill="var(--pred)" opacity=".18"/><circle r="4" fill="var(--pred)"/></svg><span>Hawks focus <b id="e-p">—</b> ahead</span></div>
     </div>
     <p class="explain">Eyes cost energy every tick, so nobody gets wide eyes for free. Sparrows still tend to earn them; hawks tend to narrow theirs.</p>
   </section>
@@ -76,8 +90,8 @@
   <section class="insp" id="insp">
     <h2>Meet a bird</h2>
     <div id="insp-empty" class="empty">
-      <p>Click any bird on the map to see its energy, its body plan, what its eyes see right now and the brain it was born with.</p>
-      <button class="btn" id="pick">Pick one for me</button>
+      <p>Click any bird on the map to see its energy, its body plan, what its eyes see right now, its family and the brain it was born with.</p>
+      <div class="actions"><button class="btn" id="pick">Pick one for me</button><button class="btn" id="release" title="Release a bird from a saved genome file into this world">Release a saved genome</button></div>
     </div>
     <div id="insp-body" style="display:none">
       <div class="meet">
@@ -101,6 +115,9 @@
       </div>
       <div class="sub">What it sees right now <span>left → right across its field of view</span></div>
       <div class="retina" id="retina"></div>
+      <div class="sub">Family <span>ancestors, chicks, descendants</span></div>
+      <p class="fam-empty" id="fam-empty">Looking up the family tree…</p>
+      <div class="fam tn" id="fam"></div>
       <div class="sub">Its brain <span>inherited at birth, fixed for life</span></div>
       <div class="brain-head" id="brain-head"></div>
       <div class="brain" id="brain"></div>
@@ -119,7 +136,9 @@
     </div>
     <div class="actions"><button class="btn" id="reset-settings">Reset</button><button class="btn" id="copy-config" title="Every parameter, as the JSON the command-line tool reads">Copy config</button></div>
     <div class="toggle"><span>Show every bird's vision <kbd>V</kbd></span><span class="sw" data-t="vision" role="switch" aria-checked="false"></span></div>
+    <div class="toggle"><span>Show the selected bird's trail <kbd>T</kbd></span><span class="sw on" data-t="trail" role="switch" aria-checked="true"></span></div>
     <div class="toggle"><span>Show seed patches</span><span class="sw on" data-t="patches" role="switch" aria-checked="true"></span></div>
+    <div class="toggle"><span>Theme</span><span class="seg mini" id="theme" role="group" aria-label="theme"></span></div>
   </section>
 </aside>
 
@@ -143,6 +162,7 @@
       <span><kbd>F</kbd></span><span>follow the selected bird</span>
       <span><kbd>R</kbd></span><span>select a random bird</span>
       <span><kbd>V</kbd></span><span>show every bird's field of view</span>
+      <span><kbd>T</kbd></span><span>show the selected bird's trail</span>
       <span><kbd>S</kbd></span><span>scatter seeds</span>
       <span><kbd>M</kbd></span><span>arm a meteor, then click</span>
       <span><kbd>0</kbd></span><span>reset the view</span>
@@ -150,6 +170,7 @@
     </div>
     <h3>Reproducible by design</h3>
     <p>The seed in the header and the settings you choose define the world completely. The same link replays the same world, tick for tick, on any machine, and the checksum in the status bar matches what the native command-line build prints for the same seed and tick.</p>
+    <p><b>Save world</b> writes this exact moment to a file. Open it here later, drop it on the map, or continue it headless with <code>rustywings run --resume</code>; <code>rustywings verify --resume … --ticks 0</code> prints the checksum you saw when you saved. <b>Save genome</b> writes one bird's body plan and brain; drop that file on another world to release the bird there.</p>
     <p class="credit">Built in Rust, compiled to WebAssembly, simulated on a Web Worker and drawn with WebGL2. Inspired by Patryk Wychowaniec's <em>Learning to Fly</em> series; the simulation, the ecosystem and this frontend are original work. <a href="https://github.com/mahim37/rustyWings" target="_blank" rel="noopener">Source on GitHub</a>.</p>
   </div>
 </dialog>

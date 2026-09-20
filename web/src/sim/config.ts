@@ -14,7 +14,7 @@ export function cloneConfig(c: Config): Config {
  * Rust as f32 and would otherwise never compare equal to a JS literal.
  */
 export function diffConfig(value: Config, base: Config): Partial<Config> {
-  return diff(value as unknown as Plain, base as unknown as Plain) as Partial<Config>;
+  return diff(value as unknown as Plain, base as unknown as Plain);
 }
 
 function diff(value: Plain, base: Plain): Plain {

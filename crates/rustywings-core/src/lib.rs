@@ -37,6 +37,7 @@ mod config;
 mod error;
 mod genome;
 mod grid;
+mod lineage;
 pub mod math;
 mod plants;
 mod retina;
@@ -51,6 +52,7 @@ pub use config::{BrainParams, Config, EvolutionParams, PlantParams, SpeciesParam
 pub use error::Error;
 pub use genome::{Bound, Genome, TraitBounds, Traits};
 pub use grid::Grid;
+pub use lineage::{Cause, Family, Lineage, Record};
 pub use plants::Plants;
 pub use retina::{CHANNELS, Retina};
 pub use rng::Rng;
