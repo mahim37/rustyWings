@@ -26,13 +26,11 @@ fi
 wasm-pack --version
 
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-if command -v corepack >/dev/null 2>&1; then
-  corepack enable pnpm 2>/dev/null || true
-fi
 
 if ! command -v pnpm >/dev/null 2>&1 || ! pnpm --version 2>/dev/null | grep -q '^10\.'; then
   echo "== installing pnpm@10"
-  npm install -g pnpm@10
+  rm -f "$(command -v pnpm 2>/dev/null || true)"
+  npm install -g --force pnpm@10
   hash -r 2>/dev/null || true
 fi
 pnpm --version
